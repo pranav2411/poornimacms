@@ -1,9 +1,10 @@
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatCard from "@/components/StatCard";
-import { complaints } from "@/lib/mockData";
+import { getComplaints } from "@/lib/api";
 
-export default function SuperadminDashboardPage() {
+export default async function SuperadminDashboardPage() {
+  const complaints = await getComplaints();
   const openCount = complaints.filter((item) => item.status !== "Closed").length;
 
   return (

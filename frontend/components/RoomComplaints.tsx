@@ -1,6 +1,6 @@
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
-import type { Complaint } from "@/lib/mockData";
+import type { Complaint } from "@/lib/types";
 
 export default function RoomComplaints({
   complaints,

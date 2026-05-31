@@ -1,14 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { notifications as notificationData } from "@/lib/mockData";
+import { getNotifications } from "@/lib/api";
+import type { NotificationItem } from "@/lib/types";
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState(notificationData);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const unreadCount = notifications.length;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadNotifications = async () => {
+      try {
+        const data = await getNotifications(10);
+        if (isMounted) setNotifications(data);
+      } catch {
+        if (isMounted) setNotifications([]);
+      }
+    };
+
+    loadNotifications();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleMarkAllRead = () => {
     setNotifications([]);

@@ -1,19 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import AssignVendorModal from "@/components/AssignVendorModal";
 import { Button } from "@/components/ui/button";
-import { complaints, vendors } from "@/lib/mockData";
+import { assignVendor, getComplaints, getVendors } from "@/lib/api";
+import type { Complaint, VendorItem } from "@/lib/types";
 
 export default function AdminComplaintsPage() {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(complaints[0]?.id ?? "");
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [vendors, setVendors] = useState<VendorItem[]>([]);
+  const [selected, setSelected] = useState("");
 
-  const handleAssign = () => {
-    setOpen(false);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const [complaintsData, vendorsData] = await Promise.all([
+          getComplaints(),
+          getVendors(),
+        ]);
+        if (!isMounted) return;
+        setComplaints(complaintsData);
+        setVendors(vendorsData);
+        setSelected((prev) => prev || complaintsData[0]?.id || "");
+      } catch {
+        if (!isMounted) return;
+        setComplaints([]);
+        setVendors([]);
+      }
+    };
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleAssign = async (vendor: string) => {
+    if (!selected) return;
+    try {
+      const updated = await assignVendor(selected, vendor);
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      setOpen(false);
+    } catch {
+      setOpen(false);
+    }
   };
 
   return (
@@ -70,7 +108,7 @@ export default function AdminComplaintsPage() {
       <AssignVendorModal
         open={open}
         onClose={() => setOpen(false)}
-        vendors={vendors}
+        vendors={vendors.map((item) => item.name)}
         onAssign={handleAssign}
       />
     </DashboardShell>

@@ -2,14 +2,14 @@ import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import ComplaintTimeline from "@/components/ComplaintTimeline";
-import { complaints } from "@/lib/mockData";
+import { getComplaint } from "@/lib/api";
 
-export default function SuperadminComplaintDetailPage({
+export default async function SuperadminComplaintDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const complaint = complaints.find((item) => item.id === params.id) ?? complaints[0];
+  const complaint = await getComplaint(params.id);
 
   return (
     <DashboardShell

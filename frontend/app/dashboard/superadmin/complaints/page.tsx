@@ -1,9 +1,10 @@
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
-import { complaints } from "@/lib/mockData";
+import { getComplaints } from "@/lib/api";
 
-export default function SuperadminComplaintsPage() {
+export default async function SuperadminComplaintsPage() {
+  const complaints = await getComplaints();
   return (
     <DashboardShell
       role="superadmin"

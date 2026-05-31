@@ -8,21 +8,28 @@ import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { complaints, type Complaint } from "@/lib/mockData";
+import {
+  closeComplaint,
+  generateOtp,
+  getComplaints,
+  reportIssue,
+  sendReminder,
+} from "@/lib/api";
+import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
-
-const openComplaints = complaints.filter(
-  (complaint) =>
-    (complaint.status !== "Fixed" && complaint.status !== "Closed") ||
-    (complaint.status === "Fixed" && complaint.workCompleted && !complaint.otpVerified)
-);
 
 export default function OpenComplaintsCarousel() {
   const { addToast } = useToast();
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isNavHovered, setIsNavHovered] = useState(false);
   const shouldReduceMotion = useReducedMotion();
+  const openComplaints = complaints.filter(
+    (complaint) =>
+      (complaint.status !== "Fixed" && complaint.status !== "Closed") ||
+      (complaint.status === "Fixed" && complaint.workCompleted && !complaint.otpVerified)
+  );
   const cardCount = openComplaints.length;
   const visibleCount = 3;
   const cardWidth = 300;
@@ -59,12 +66,29 @@ export default function OpenComplaintsCarousel() {
   // State for actions
   const [closeReason, setCloseReason] = useState("");
   const [generatedOTP, setGeneratedOTP] = useState<string | null>(null);
-  const [reminderTimestamps, setReminderTimestamps] = useState<Record<string, string>>({});
   const [timeRemaining, setTimeRemaining] = useState<Record<string, string>>({});
   const [reportForm, setReportForm] = useState({
     reason: "Work was not completed",
     details: "",
   });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadComplaints = async () => {
+      try {
+        const data = await getComplaints();
+        if (isMounted) setComplaints(data);
+      } catch {
+        if (isMounted) setComplaints([]);
+      }
+    };
+
+    loadComplaints();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (cardCount === 0) return;
@@ -76,8 +100,9 @@ export default function OpenComplaintsCarousel() {
     const interval = setInterval(() => {
       const newTimeRemaining: Record<string, string> = {};
 
-      Object.entries(reminderTimestamps).forEach(([complaintId, timestamp]) => {
-        const lastReminderTime = new Date(timestamp).getTime();
+      complaints.forEach((complaint) => {
+        if (!complaint.lastReminderSent) return;
+        const lastReminderTime = new Date(complaint.lastReminderSent).getTime();
         const now = new Date().getTime();
         const msRemaining = 24 * 60 * 60 * 1000 - (now - lastReminderTime);
 
@@ -88,9 +113,9 @@ export default function OpenComplaintsCarousel() {
           );
 
           if (hoursRemaining > 0) {
-            newTimeRemaining[complaintId] = `${hoursRemaining}h`;
+            newTimeRemaining[complaint.id] = `${hoursRemaining}h`;
           } else {
-            newTimeRemaining[complaintId] = `${minutesRemaining}m`;
+            newTimeRemaining[complaint.id] = `${minutesRemaining}m`;
           }
         }
       });
@@ -99,10 +124,11 @@ export default function OpenComplaintsCarousel() {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [reminderTimestamps]);
+  }, [complaints]);
 
   const canSendReminder = (complaintId: string): boolean => {
-    const lastReminder = reminderTimestamps[complaintId];
+    const complaint = complaints.find((item) => item.id === complaintId);
+    const lastReminder = complaint?.lastReminderSent;
     if (!lastReminder) return true;
 
     const lastReminderTime = new Date(lastReminder).getTime();
@@ -111,11 +137,7 @@ export default function OpenComplaintsCarousel() {
     return hoursPassed >= 24;
   };
 
-  const generateOTP = (): string => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
-  const handleCloseComplaint = () => {
+  const handleCloseComplaint = async () => {
     if (!closeConfirm || !closeReason.trim()) {
       addToast({
         title: "Error",
@@ -125,54 +147,80 @@ export default function OpenComplaintsCarousel() {
       return;
     }
 
-    addToast({
-      title: "Success",
-      description: `Complaint ${closeConfirm.id} has been closed`,
-    });
-
-    const complaint = complaints.find(c => c.id === closeConfirm.id);
-    if (complaint) {
-      complaint.closeReason = closeReason;
-      complaint.status = "Closed";
+    try {
+      const updated = await closeComplaint(closeConfirm.id, closeReason.trim());
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      addToast({
+        title: "Success",
+        description: `Complaint ${closeConfirm.id} has been closed`,
+      });
+      setCloseConfirm(null);
+      setCloseReason("");
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to close complaint",
+        variant: "destructive",
+      });
     }
-
-    setCloseConfirm(null);
-    setCloseReason("");
   };
 
-  const handleRemindVendor = () => {
+  const handleRemindVendor = async () => {
     if (!remindVendor) return;
-    const now = new Date().toISOString();
-    setReminderTimestamps((prev) => ({
-      ...prev,
-      [remindVendor.id]: now,
-    }));
-
-    addToast({
-      title: "Reminder Sent",
-      description: `Reminder sent to ${remindVendor.assignedTo}`,
-    });
-
-    setRemindVendor(null);
+    try {
+      const updated = await sendReminder(remindVendor.id);
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      addToast({
+        title: "Reminder Sent",
+        description: `Reminder sent to ${remindVendor.assignedTo}`,
+      });
+      setRemindVendor(null);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send reminder",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleOpenVerifyModal = (complaint: Complaint) => {
-    const otp = generateOTP();
-    setGeneratedOTP(otp);
-    setVerifyOTP(complaint);
+  const handleOpenVerifyModal = async (complaint: Complaint) => {
+    try {
+      const response = await generateOtp(complaint.id);
+      setGeneratedOTP(response.otp);
+      setVerifyOTP(complaint);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate OTP",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleReportSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleReportSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!reportComplaint) return;
 
-    addToast({
-      title: "Report Submitted",
-      description: `Report sent to superadmin for ${reportComplaint.id}`,
-    });
-
-    setReportComplaint(null);
-    setReportForm({ reason: "Work was not completed", details: "" });
+    try {
+      await reportIssue(reportComplaint.id, reportForm.reason, reportForm.details);
+      addToast({
+        title: "Report Submitted",
+        description: `Report sent to superadmin for ${reportComplaint.id}`,
+      });
+      setReportComplaint(null);
+      setReportForm({ reason: "Work was not completed", details: "" });
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit report",
+        variant: "destructive",
+      });
+    }
   }
 
   const transition = shouldReduceMotion

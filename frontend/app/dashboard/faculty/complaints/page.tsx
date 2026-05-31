@@ -5,20 +5,25 @@ import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
-import { complaints, type Complaint } from "@/lib/mockData";
+import {
+  closeComplaint,
+  generateOtp,
+  getComplaints,
+  reportIssue,
+  sendReminder,
+} from "@/lib/api";
+import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
 
 export default function FacultyComplaintsPage() {
   const { addToast } = useToast();
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null);
   const [reportComplaint, setReportComplaint] = useState<Complaint | null>(null);
   const [closeConfirm, setCloseConfirm] = useState<Complaint | null>(null);
   const [remindVendor, setRemindVendor] = useState<Complaint | null>(null);
   const [verifyOTP, setVerifyOTP] = useState<Complaint | null>(null);
   const [generatedOTP, setGeneratedOTP] = useState<string | null>(null);
-  const [reminderTimestamps, setReminderTimestamps] = useState<
-    Record<string, string>
-  >({});
   const [closeReason, setCloseReason] = useState("");
   const [reportForm, setReportForm] = useState({
     reason: "Work was not completed",
@@ -30,13 +35,32 @@ export default function FacultyComplaintsPage() {
     ? complaints.find((item) => item.id === openDetailsId) ?? null
     : null;
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadComplaints = async () => {
+      try {
+        const data = await getComplaints();
+        if (isMounted) setComplaints(data);
+      } catch {
+        if (isMounted) setComplaints([]);
+      }
+    };
+
+    loadComplaints();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Update countdown timer
   useEffect(() => {
     const interval = setInterval(() => {
       const newTimeRemaining: Record<string, string> = {};
 
-      Object.entries(reminderTimestamps).forEach(([complaintId, timestamp]) => {
-        const lastReminderTime = new Date(timestamp).getTime();
+      complaints.forEach((complaint) => {
+        if (!complaint.lastReminderSent) return;
+        const lastReminderTime = new Date(complaint.lastReminderSent).getTime();
         const now = new Date().getTime();
         const msRemaining = 24 * 60 * 60 * 1000 - (now - lastReminderTime);
 
@@ -47,9 +71,9 @@ export default function FacultyComplaintsPage() {
           );
 
           if (hoursRemaining > 0) {
-            newTimeRemaining[complaintId] = `${hoursRemaining}h`;
+            newTimeRemaining[complaint.id] = `${hoursRemaining}h`;
           } else {
-            newTimeRemaining[complaintId] = `${minutesRemaining}m`;
+            newTimeRemaining[complaint.id] = `${minutesRemaining}m`;
           }
         }
       });
@@ -58,11 +82,12 @@ export default function FacultyComplaintsPage() {
     }, 60000); // Update every minute
 
     return () => clearInterval(interval);
-  }, [reminderTimestamps]);
+  }, [complaints]);
 
   // Check if 24 hours have passed since last reminder
   const canSendReminder = (complaintId: string): boolean => {
-    const lastReminder = reminderTimestamps[complaintId];
+    const complaint = complaints.find((item) => item.id === complaintId);
+    const lastReminder = complaint?.lastReminderSent;
     if (!lastReminder) return true;
 
     const lastReminderTime = new Date(lastReminder).getTime();
@@ -72,11 +97,7 @@ export default function FacultyComplaintsPage() {
   };
 
   // Generate a random 6-digit OTP
-  const generateOTP = (): string => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
-  const handleCloseComplaint = () => {
+  const handleCloseComplaint = async () => {
     if (!closeConfirm || !closeReason.trim()) {
       addToast({
         title: "Error",
@@ -86,57 +107,81 @@ export default function FacultyComplaintsPage() {
       return;
     }
 
-    addToast({
-      title: "Success",
-      description: `Complaint ${closeConfirm.id} has been closed`,
-    });
-    
-    // Update the complaint with close reason
-    const complaint = complaints.find(c => c.id === closeConfirm.id);
-    if (complaint) {
-      complaint.closeReason = closeReason;
-      complaint.status = "Closed";
+    try {
+      const updated = await closeComplaint(closeConfirm.id, closeReason.trim());
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      addToast({
+        title: "Success",
+        description: `Complaint ${closeConfirm.id} has been closed`,
+      });
+      setCloseConfirm(null);
+      setCloseReason("");
+      setOpenDetailsId(null);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to close complaint",
+        variant: "destructive",
+      });
     }
-
-    setCloseConfirm(null);
-    setCloseReason("");
-    setOpenDetailsId(null);
   };
 
-  const handleRemindVendor = () => {
+  const handleRemindVendor = async () => {
     if (!remindVendor) return;
-    const now = new Date().toISOString();
-    setReminderTimestamps((prev) => ({
-      ...prev,
-      [remindVendor.id]: now,
-    }));
-
-    addToast({
-      title: "Reminder Sent",
-      description: `Reminder sent to ${remindVendor.assignedTo}`,
-    });
-
-    setRemindVendor(null);
+    try {
+      const updated = await sendReminder(remindVendor.id);
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      addToast({
+        title: "Reminder Sent",
+        description: `Reminder sent to ${remindVendor.assignedTo}`,
+      });
+      setRemindVendor(null);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send reminder",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleReportSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleReportSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!reportComplaint) return;
-
-    addToast({
-      title: "Report Submitted",
-      description: `Report sent to superadmin for ${reportComplaint.id}`,
-    });
-
-    setReportComplaint(null);
-    setReportForm({ reason: "Work was not completed", details: "" });
-    setOpenDetailsId(null);
+    try {
+      await reportIssue(reportComplaint.id, reportForm.reason, reportForm.details);
+      addToast({
+        title: "Report Submitted",
+        description: `Report sent to superadmin for ${reportComplaint.id}`,
+      });
+      setReportComplaint(null);
+      setReportForm({ reason: "Work was not completed", details: "" });
+      setOpenDetailsId(null);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit report",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleOpenVerifyModal = (complaint: Complaint) => {
-    const otp = generateOTP();
-    setGeneratedOTP(otp);
-    setVerifyOTP(complaint);
+  const handleOpenVerifyModal = async (complaint: Complaint) => {
+    try {
+      const response = await generateOtp(complaint.id);
+      setGeneratedOTP(response.otp);
+      setVerifyOTP(complaint);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate OTP",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

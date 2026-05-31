@@ -1,9 +1,10 @@
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
-import { complaints } from "@/lib/mockData";
+import { getComplaints } from "@/lib/api";
 
-export default function VendorDashboardPage() {
+export default async function VendorDashboardPage() {
+  const complaints = await getComplaints();
   const assigned = complaints.filter((item) => item.status !== "Closed");
 
   return (

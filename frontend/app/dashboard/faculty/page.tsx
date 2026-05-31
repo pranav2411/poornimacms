@@ -2,9 +2,10 @@ import DashboardShell from "@/components/DashboardShell";
 import OpenComplaintsCarousel from "@/components/OpenComplaintsCarousel";
 import StatsCharts from "@/components/StatsCharts";
 import { Button } from "@/components/ui/button";
-import { facultyStats } from "@/lib/mockData";
+import { getStats } from "@/lib/api";
 
-export default function FacultyDashboardPage() {
+export default async function FacultyDashboardPage() {
+  const facultyStats = await getStats();
   return (
     <DashboardShell
       role="faculty"

@@ -3,9 +3,10 @@ import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
-import { complaints } from "@/lib/mockData";
+import { getComplaints } from "@/lib/api";
 
-export default function VendorAssignmentsPage() {
+export default async function VendorAssignmentsPage() {
+  const complaints = await getComplaints();
   const assigned = complaints.filter((item) => item.status !== "Closed");
 
   return (

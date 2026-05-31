@@ -7,7 +7,8 @@ import GlassButton from "@/components/GlassButton";
 import RoomComplaints from "@/components/RoomComplaints";
 import StepForm from "@/components/StepForm";
 import { Button } from "@/components/ui/button";
-import { categories, complaints } from "@/lib/mockData";
+import { createComplaint, getCategories, getComplaints } from "@/lib/api";
+import type { Complaint } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const steps = ["Room verification", "Complaint details", "Review & submit"];
@@ -18,14 +19,37 @@ export default function NewComplaintPage() {
   const [showRoomPanel, setShowRoomPanel] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(categories[0]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
 
   const roomComplaints = useMemo(
     () => complaints.filter((item) => item.room === room && item.status !== "Closed"),
-    [room]
+    [complaints, room]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const data = await getCategories();
+        if (!isMounted) return;
+        setCategories(data);
+        setCategory((prev) => prev || data[0] || "");
+      } catch {
+        if (!isMounted) return;
+        setCategories([]);
+      }
+    };
+
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!room) {
@@ -38,11 +62,49 @@ export default function NewComplaintPage() {
     return () => window.clearTimeout(timeout);
   }, [room]);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    if (!room) {
+      setComplaints([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadComplaints = async () => {
+      try {
+        const data = await getComplaints();
+        if (isMounted) setComplaints(data);
+      } catch {
+        if (isMounted) setComplaints([]);
+      }
+    };
+
+    loadComplaints();
+    return () => {
+      isMounted = false;
+    };
+  }, [room]);
+
+  const handleSubmit = async () => {
+    if (!room || !category || !title || !description) return;
     setIsSubmitting(true);
-    window.setTimeout(() => {
+    try {
+      await createComplaint({
+        room,
+        category,
+        title,
+        description,
+        priority,
+      });
       setIsSubmitting(false);
-    }, 1400);
+      setCurrentStep(0);
+      setRoom("");
+      setTitle("");
+      setDescription("");
+      setPriority("Medium");
+    } catch {
+      setIsSubmitting(false);
+    }
   };
 
   return (

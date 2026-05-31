@@ -1,21 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import ComplaintTimeline from "@/components/ComplaintTimeline";
 import AssignVendorModal from "@/components/AssignVendorModal";
 import { Button } from "@/components/ui/button";
-import { complaints, vendors } from "@/lib/mockData";
+import { assignVendor, getComplaint, getVendors } from "@/lib/api";
+import type { Complaint, VendorItem } from "@/lib/types";
 
 export default function AdminComplaintDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const complaint = complaints.find((item) => item.id === params.id) ?? complaints[0];
   const [open, setOpen] = useState(false);
+  const [complaint, setComplaint] = useState<Complaint | null>(null);
+  const [vendors, setVendors] = useState<VendorItem[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const [complaintData, vendorsData] = await Promise.all([
+          getComplaint(params.id),
+          getVendors(),
+        ]);
+        if (!isMounted) return;
+        setComplaint(complaintData);
+        setVendors(vendorsData);
+      } catch {
+        if (!isMounted) return;
+        setComplaint(null);
+        setVendors([]);
+      }
+    };
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [params.id]);
+
+  const handleAssign = async (vendor: string) => {
+    if (!complaint) return;
+    try {
+      const updated = await assignVendor(complaint.id, vendor);
+      setComplaint(updated);
+      setOpen(false);
+    } catch {
+      setOpen(false);
+    }
+  };
 
   return (
     <DashboardShell
@@ -30,16 +68,16 @@ export default function AdminComplaintDetailPage({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                {complaint.id}
+                {complaint?.id ?? "-"}
               </p>
               <h2 className="text-2xl font-semibold text-heading">
-                {complaint.title}
+                {complaint?.title ?? "Loading..."}
               </h2>
             </div>
-            <StatusPill status={complaint.status} />
+            {complaint ? <StatusPill status={complaint.status} /> : null}
           </div>
           <p className="mt-6 text-sm text-body/80">
-            {complaint.description}
+            {complaint?.description ?? ""}
           </p>
           <Button
             type="button"
@@ -51,7 +89,7 @@ export default function AdminComplaintDetailPage({
         </GlassCard>
         <GlassCard className="p-6">
           <h3 className="text-sm font-semibold text-heading">Status timeline</h3>
-          <p className="text-xs text-muted">Updated at {complaint.updatedAt}</p>
+          <p className="text-xs text-muted">Updated at {complaint?.updatedAt ?? "-"}</p>
           <div className="mt-4">
             <ComplaintTimeline activeStep={2} />
           </div>
@@ -61,8 +99,8 @@ export default function AdminComplaintDetailPage({
       <AssignVendorModal
         open={open}
         onClose={() => setOpen(false)}
-        vendors={vendors}
-        onAssign={() => setOpen(false)}
+        vendors={vendors.map((item) => item.name)}
+        onAssign={handleAssign}
       />
     </DashboardShell>
   );

@@ -1,14 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import OTPInput from "@/components/OTPInput";
 import GlassButton from "@/components/GlassButton";
+import { verifyOtp } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 
 export default function VendorOtpPage() {
+  const { addToast } = useToast();
+  const params = useParams<{ id: string }>();
   const [otp, setOtp] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isValid = otp.length === 6;
+
+  const handleSubmit = async () => {
+    if (!isValid || !params.id) return;
+    setIsSubmitting(true);
+    try {
+      await verifyOtp(params.id, otp);
+      addToast({
+        title: "OTP verified",
+        description: "Work completion confirmed.",
+      });
+      setOtp("");
+    } catch (error) {
+      addToast({
+        title: "Verification failed",
+        description: error instanceof Error ? error.message : "Invalid OTP",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <DashboardShell
@@ -34,9 +61,10 @@ export default function VendorOtpPage() {
           </div>
           <div className="mt-8 flex justify-center">
             <GlassButton
-              label="Confirm Fix"
-              disabled={!isValid}
+              label={isSubmitting ? "Verifying..." : "Confirm Fix"}
+              disabled={!isValid || isSubmitting}
               className="w-48"
+              onClick={handleSubmit}
             />
           </div>
         </GlassCard>

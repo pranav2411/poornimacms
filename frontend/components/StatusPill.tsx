@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ComplaintStatus } from "@/lib/mockData";
+import type { ComplaintStatus } from "@/lib/types";
 
 const statusStyles: Record<ComplaintStatus, string> = {
   Pending: "bg-pending/15 text-pending border-pending/30",
