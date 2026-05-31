@@ -28,13 +28,24 @@ const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   ],
 };
 
-export default function Sidebar({ role }: { role: UserRole }) {
+export default function Sidebar({
+  role,
+  className,
+}: {
+  role: UserRole;
+  className?: string;
+}) {
   const pathname = usePathname();
   const items = navConfig[role];
   const roleLabel = role === "faculty" ? "Faculty Dashboard" : role;
 
   return (
-    <aside className="flex h-full w-64 flex-col justify-between border-r border-border bg-surface/70 px-6 py-8">
+    <aside
+      className={cn(
+        "flex h-full w-64 flex-col justify-between border-r border-border bg-surface px-6 py-8 text-heading shadow-xl",
+        className
+      )}
+    >
       <div className="flex flex-col gap-6">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted">
           Poornima CMS

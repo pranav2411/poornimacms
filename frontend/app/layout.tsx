@@ -43,7 +43,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-bg text-body">
         <ShaderBackground />
         <Toaster />
-        <div className="relative z-10 h-screen flex flex-col overflow-hidden">
+        <div className="relative z-10 min-h-screen flex flex-col overflow-x-hidden">
           {children}
         </div>
       </body>

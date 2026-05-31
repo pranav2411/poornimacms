@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
@@ -24,6 +25,7 @@ export default function OpenComplaintsCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isNavHovered, setIsNavHovered] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   const shouldReduceMotion = useReducedMotion();
   const openComplaints = complaints.filter(
     (complaint) =>
@@ -31,11 +33,11 @@ export default function OpenComplaintsCarousel() {
       (complaint.status === "Fixed" && complaint.workCompleted && !complaint.otpVerified)
   );
   const cardCount = openComplaints.length;
-  const visibleCount = 3;
-  const cardWidth = 300;
-  const focusedCardWidth = 380;
-  const cardGap = 24;
-  const arrowGutter = 72;
+  const visibleCount = isCompact ? 1 : 3;
+  const cardWidth = isCompact ? 280 : 300;
+  const focusedCardWidth = isCompact ? 320 : 380;
+  const cardGap = isCompact ? 16 : 24;
+  const arrowGutter = isCompact ? 0 : 72;
   const visibleSlots = Math.min(visibleCount, Math.max(cardCount, 1));
   const containerWidth =
     cardWidth * visibleSlots +
@@ -73,6 +75,15 @@ export default function OpenComplaintsCarousel() {
   });
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsCompact(media.matches);
+    update();
+    if ("addEventListener" in media) {
+      media.addEventListener("change", update);
+    } else {
+      media.addListener(update);
+    }
+
     let isMounted = true;
 
     const loadComplaints = async () => {
@@ -87,6 +98,11 @@ export default function OpenComplaintsCarousel() {
     loadComplaints();
     return () => {
       isMounted = false;
+      if ("removeEventListener" in media) {
+        media.removeEventListener("change", update);
+      } else {
+        media.removeListener(update);
+      }
     };
   }, []);
 
@@ -253,260 +269,293 @@ export default function OpenComplaintsCarousel() {
             </p>
           </div>
           <div className="text-sm text-muted">
-            {openComplaints.length} open complaint{openComplaints.length === 1 ? "" : "s"}
+            {openComplaints.length === 0
+              ? "No open complaints"
+              : `${openComplaints.length} open complaint${openComplaints.length === 1 ? "" : "s"}`}
           </div>
         </div>
 
-        <div className="mt-6">
-          <div
-            className="relative mx-auto flex items-center"
-            style={{ width: `${outerWidth}px` }}
-          >
+        {openComplaints.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-border bg-surface/70 p-6 text-center">
+            <p className="text-sm font-semibold text-heading">
+              No open complaints right now.
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              Have a complaint? File one and we'll get it in the queue.
+            </p>
             <Button
-              type="button"
-              onClick={handlePrevious}
-              onMouseEnter={() => setIsNavHovered(true)}
-              onMouseLeave={() => setIsNavHovered(false)}
-              onFocus={() => setIsNavHovered(true)}
-              onBlur={() => setIsNavHovered(false)}
-              variant="outline"
-              size="icon-sm"
-              className="absolute left-0 top-1/2 z-10 -translate-y-1/2 border-border bg-surface text-heading shadow-xl ring-1 ring-border/70 hover:bg-surface hover:text-heading"
+              asChild
+              size="sm"
+              className="mt-4 border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
             >
-              <FontAwesomeIcon icon={faChevronLeft} className="h-4 w-4 text-heading" />
+              <Link href="/complaints/new">File new complaint</Link>
             </Button>
+          </div>
+        ) : (
+          <div className="mt-6">
+            <div
+              className="relative mx-auto flex max-w-full items-center"
+              style={{ width: isCompact ? "100%" : `${outerWidth}px` }}
+            >
+              <Button
+                type="button"
+                onClick={handlePrevious}
+                onMouseEnter={() => setIsNavHovered(true)}
+                onMouseLeave={() => setIsNavHovered(false)}
+                onFocus={() => setIsNavHovered(true)}
+                onBlur={() => setIsNavHovered(false)}
+                variant="outline"
+                size="icon-sm"
+                className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 border-border bg-surface text-heading shadow-xl ring-1 ring-border/70 hover:bg-surface hover:text-heading md:inline-flex"
+              >
+                <FontAwesomeIcon icon={faChevronLeft} className="h-4 w-4 text-heading" />
+              </Button>
 
-            <div className="mx-auto overflow-hidden" style={{ width: `${containerWidth}px` }}>
               <div
-                className={cn("flex gap-6 pb-2")}
-                style={{ width: `${containerWidth}px` }}
-                aria-label="Open complaints carousel"
+                className="mx-auto w-full overflow-hidden"
+                style={{ width: isCompact ? "100%" : `${containerWidth}px` }}
               >
-              {visibleIndices.map((complaintIndex, position) => {
-              const complaint = openComplaints[complaintIndex];
-              if (!complaint) return null;
-              const isProminent = focusedIndex === position;
-              const cardHeight = 460;
-              const currentCardWidth = isProminent ? focusedCardWidth : cardWidth;
-              const roadmap = complaint.timeline ?? [];
+                <div
+                  className={cn("flex gap-6 pb-2", isCompact && "justify-center")}
+                  style={{ width: isCompact ? "100%" : `${containerWidth}px` }}
+                  aria-label="Open complaints carousel"
+                >
+                  {visibleIndices.map((complaintIndex, position) => {
+                    const complaint = openComplaints[complaintIndex];
+                    if (!complaint) return null;
+                    const isProminent = focusedIndex === position;
+                    const cardHeight = 460;
+                    const currentCardWidth = isProminent ? focusedCardWidth : cardWidth;
+                    const roadmap = complaint.timeline ?? [];
 
-            return (
-              <motion.article
-                key={`${complaint.id}-${complaintIndex}`}
-                tabIndex={0}
-                onMouseEnter={() => setHoveredIndex(position)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                onFocus={() => setHoveredIndex(position)}
-                onBlur={() => setHoveredIndex(null)}
-                animate={{
-                  width: currentCardWidth,
-                  height: cardHeight,
-                  y: isProminent ? -6 : 8,
-                  opacity: isProminent ? 1 : 0.82,
-                  scale: isProminent ? 1.01 : 0.99,
-                }}
-                style={{ flex: "0 0 auto", width: currentCardWidth, minWidth: currentCardWidth }}
-                transition={transition}
-                className={cn(
-                  "group relative flex-none overflow-hidden rounded-[2rem] border border-border/80",
-                  "bg-surface/90 shadow-[0_18px_50px_rgba(15,23,42,0.08)] outline-none",
-                  "focus-visible:ring-2 focus-visible:ring-accent/40"
-                )}
-              >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(26,63,170,0.08),transparent_48%)]" />
-                <div className="relative flex h-full flex-col gap-3 p-5 md:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                        {complaint.id}
-                      </p>
-                      <h3 className="mt-2 text-lg font-semibold text-heading">
-                        {complaint.title}
-                      </h3>
-                      <p className="mt-1 text-sm text-muted">
-                        {complaint.room} · {complaint.category}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <StatusPill status={complaint.status} />
-                      <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-heading">
-                        {complaint.priority} priority
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-sm leading-6 text-body">
-                    {complaint.description}
-                  </p>
-
-                  <div className="rounded-2xl border border-border/80 bg-surface/70 p-3 backdrop-blur-sm flex-1 overflow-y-auto">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                          Roadmap
-                        </p>
-                        <p className="text-xs text-body">
-                          Latest updates
-                        </p>
-                      </div>
-                      <span className="text-xs font-medium text-muted">
-                        {complaint.updatedAt}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 space-y-3">
-                      {roadmap.map((item, timelineIndex) => {
-                        const isLast = timelineIndex === roadmap.length - 1;
-
-                        return (
-                          <div key={`${complaint.id}-${item.label}-${timelineIndex}`} className="relative pl-5">
-                            <span
-                              className={cn(
-                                "absolute left-[0.2rem] top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surface",
-                                timelineIndex === 0 ? "bg-primary" : "bg-accent"
-                              )}
-                            />
-                            {!isLast && (
-                              <span className="absolute left-[0.6rem] top-4 h-[calc(100%+0.5rem)] w-px bg-border" />
-                            )}
-                            <p className="text-xs font-medium text-heading">{item.label}</p>
-                            <p className="mt-0.5 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
-                              {item.time}
-                            </p>
+                    return (
+                      <motion.article
+                        key={`${complaint.id}-${complaintIndex}`}
+                        tabIndex={0}
+                        onMouseEnter={() => setHoveredIndex(position)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                        onFocus={() => setHoveredIndex(position)}
+                        onBlur={() => setHoveredIndex(null)}
+                        animate={{
+                          width: currentCardWidth,
+                          height: cardHeight,
+                          y: isProminent ? -6 : 8,
+                          opacity: isProminent ? 1 : 0.82,
+                          scale: isProminent ? 1.01 : 0.99,
+                        }}
+                        style={{
+                          flex: "0 0 auto",
+                          width: currentCardWidth,
+                          minWidth: currentCardWidth,
+                        }}
+                        transition={transition}
+                        className={cn(
+                          "group relative flex-none overflow-hidden rounded-[2rem] border border-border/80",
+                          "bg-surface/90 shadow-[0_18px_50px_rgba(15,23,42,0.08)] outline-none",
+                          "focus-visible:ring-2 focus-visible:ring-accent/40"
+                        )}
+                      >
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(26,63,170,0.08),transparent_48%)]" />
+                        <div className="relative flex h-full flex-col gap-3 p-5 md:p-6">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                                {complaint.id}
+                              </p>
+                              <h3 className="mt-2 text-lg font-semibold text-heading">
+                                {complaint.title}
+                              </h3>
+                              <p className="mt-1 text-sm text-muted">
+                                {complaint.room} · {complaint.category}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <StatusPill status={complaint.status} />
+                              <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-heading">
+                                {complaint.priority} priority
+                              </span>
+                            </div>
                           </div>
-                        );
-                      })}
 
-                      {roadmap.length === 0 && (
-                        <p className="text-xs text-muted">
-                          No updates yet.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                          <p className="text-sm leading-6 text-body">
+                            {complaint.description}
+                          </p>
 
-                  {isProminent && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {complaint.status === "Pending" && !complaint.assignedTo && (
-                        <Button
-                          type="button"
-                          onClick={() => setCloseConfirm(complaint)}
-                          size="sm"
-                          className="inline-flex items-center gap-2 border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500 text-xs"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          Close
-                        </Button>
-                      )}
+                          <div className="flex-1 overflow-y-auto rounded-2xl border border-border/80 bg-surface/70 p-3 backdrop-blur-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                                  Roadmap
+                                </p>
+                                <p className="text-xs text-body">
+                                  Latest updates
+                                </p>
+                              </div>
+                              <span className="text-xs font-medium text-muted">
+                                {complaint.updatedAt}
+                              </span>
+                            </div>
 
-                      {(complaint.status === "Assigned" || complaint.status === "In Progress") && complaint.assignedTo && (
-                        <Button
-                          type="button"
-                          onClick={() => setRemindVendor(complaint)}
-                          size="sm"
-                          disabled={!canSendReminder(complaint.id)}
-                          className="inline-flex items-center gap-2 border-blue-500 bg-blue-500 text-surface disabled:opacity-50 disabled:cursor-not-allowed hover:bg-transparent hover:text-blue-500 disabled:hover:bg-blue-500 disabled:hover:text-surface text-xs"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                          </svg>
-                          {canSendReminder(complaint.id) ? "Remind" : `In ${timeRemaining[complaint.id] || "..."}`}
-                        </Button>
-                      )}
+                            <div className="mt-3 space-y-3">
+                              {roadmap.map((item, timelineIndex) => {
+                                const isLast = timelineIndex === roadmap.length - 1;
 
-                      {complaint.status === "Fixed" && complaint.workCompleted && !complaint.otpVerified && (
-                        <Button
-                          type="button"
-                          onClick={() => handleOpenVerifyModal(complaint)}
-                          size="sm"
-                          className="inline-flex items-center gap-2 border-purple-500 bg-purple-500 text-surface hover:bg-transparent hover:text-purple-500 text-xs"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                            <path d="M10 17l-5-5" />
-                            <path d="M14 12l-4 5" />
-                          </svg>
-                          Verify
-                        </Button>
-                      )}
+                                return (
+                                  <div
+                                    key={`${complaint.id}-${item.label}-${timelineIndex}`}
+                                    className="relative pl-5"
+                                  >
+                                    <span
+                                      className={cn(
+                                        "absolute left-[0.2rem] top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surface",
+                                        timelineIndex === 0 ? "bg-primary" : "bg-accent"
+                                      )}
+                                    />
+                                    {!isLast && (
+                                      <span className="absolute left-[0.6rem] top-4 h-[calc(100%+0.5rem)] w-px bg-border" />
+                                    )}
+                                    <p className="text-xs font-medium text-heading">{item.label}</p>
+                                    <p className="mt-0.5 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                                      {item.time}
+                                    </p>
+                                  </div>
+                                );
+                              })}
 
-                      {complaint.status === "Fixed" && complaint.otpVerified && (
-                        <Button
-                          type="button"
-                          onClick={() => setReportComplaint(complaint)}
-                          size="sm"
-                          className="inline-flex items-center gap-2 border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500 text-xs"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M12 3l9 16H3l9-16z" />
-                            <path d="M12 9v4" />
-                            <path d="M12 17h.01" />
-                          </svg>
-                          Report
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                              {roadmap.length === 0 && (
+                                <p className="text-xs text-muted">No updates yet.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {isProminent && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {complaint.status === "Pending" && !complaint.assignedTo && (
+                                <Button
+                                  type="button"
+                                  onClick={() => setCloseConfirm(complaint)}
+                                  size="sm"
+                                  className="inline-flex items-center gap-2 border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500 text-xs"
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                  Close
+                                </Button>
+                              )}
+
+                              {(complaint.status === "Assigned" || complaint.status === "In Progress") &&
+                                complaint.assignedTo && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => setRemindVendor(complaint)}
+                                    size="sm"
+                                    disabled={!canSendReminder(complaint.id)}
+                                    className="inline-flex items-center gap-2 border-blue-500 bg-blue-500 text-surface disabled:cursor-not-allowed disabled:opacity-50 hover:bg-transparent hover:text-blue-500 disabled:hover:bg-blue-500 disabled:hover:text-surface text-xs"
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="h-3 w-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                    </svg>
+                                    {canSendReminder(complaint.id)
+                                      ? "Remind"
+                                      : `In ${timeRemaining[complaint.id] || "..."}`}
+                                  </Button>
+                                )}
+
+                              {complaint.status === "Fixed" &&
+                                complaint.workCompleted &&
+                                !complaint.otpVerified && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => handleOpenVerifyModal(complaint)}
+                                    size="sm"
+                                    className="inline-flex items-center gap-2 border-purple-500 bg-purple-500 text-surface hover:bg-transparent hover:text-purple-500 text-xs"
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="h-3 w-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                                      <path d="M10 17l-5-5" />
+                                      <path d="M14 12l-4 5" />
+                                    </svg>
+                                    Verify
+                                  </Button>
+                                )}
+
+                              {complaint.status === "Fixed" && complaint.otpVerified && (
+                                <Button
+                                  type="button"
+                                  onClick={() => setReportComplaint(complaint)}
+                                  size="sm"
+                                  className="inline-flex items-center gap-2 border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500 text-xs"
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M12 3l9 16H3l9-16z" />
+                                    <path d="M12 9v4" />
+                                    <path d="M12 17h.01" />
+                                  </svg>
+                                  Report
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </motion.article>
+                    );
+                  })}
                 </div>
-              </motion.article>
-            );
-            })}
               </div>
-            </div>
 
-            <Button
-              type="button"
-              onClick={handleNext}
-              onMouseEnter={() => setIsNavHovered(true)}
-              onMouseLeave={() => setIsNavHovered(false)}
-              onFocus={() => setIsNavHovered(true)}
-              onBlur={() => setIsNavHovered(false)}
-              variant="outline"
-              size="icon-sm"
-              className="absolute right-0 top-1/2 z-10 -translate-y-1/2 border-border bg-surface text-heading shadow-xl ring-1 ring-border/70 hover:bg-surface hover:text-heading"
-            >
-              <FontAwesomeIcon icon={faChevronRight} className="h-4 w-4 text-heading" />
-            </Button>
+              <Button
+                type="button"
+                onClick={handleNext}
+                onMouseEnter={() => setIsNavHovered(true)}
+                onMouseLeave={() => setIsNavHovered(false)}
+                onFocus={() => setIsNavHovered(true)}
+                onBlur={() => setIsNavHovered(false)}
+                variant="outline"
+                size="icon-sm"
+                className="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 border-border bg-surface text-heading shadow-xl ring-1 ring-border/70 hover:bg-surface hover:text-heading md:inline-flex"
+              >
+                <FontAwesomeIcon icon={faChevronRight} className="h-4 w-4 text-heading" />
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </GlassCard>
 
       {/* Close confirmation modal */}
