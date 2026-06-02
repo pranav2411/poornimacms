@@ -16,8 +16,6 @@ class Settings(BaseSettings):
 
     supabase_url: str = Field(..., alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(..., alias="SUPABASE_SERVICE_ROLE_KEY")
-
-    otp_secret: str = Field(..., alias="OTP_SECRET")
     otp_ttl_minutes: int = 10
 
     model_config = SettingsConfigDict(

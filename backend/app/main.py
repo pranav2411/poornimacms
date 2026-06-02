@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers import complaints, meta, notifications, stats, vendors
+from app.routers.users import router as users_router
 
 app = FastAPI(title="Poornima CMS API", version="1.0.0")
 
@@ -27,3 +28,4 @@ app.include_router(vendors.router)
 app.include_router(notifications.router)
 app.include_router(stats.router)
 app.include_router(meta.router)
+app.include_router(users_router)

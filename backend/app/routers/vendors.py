@@ -13,6 +13,13 @@ router = APIRouter(prefix="/vendors", tags=["vendors"])
 @router.get("", response_model=List[VendorItem])
 def list_vendors() -> List[VendorItem]:
     supabase = get_supabase()
-    response = supabase.table("vendors").select("name").order("name").execute()
+    # vendors are now stored in `users` table with role='vendor'
+    response = (
+        supabase.table("users")
+        .select("id, name")
+        .eq("role", "vendor")
+        .order("name")
+        .execute()
+    )
     data = response.data or []
-    return [{"name": item["name"]} for item in data]
+    return [{"id": item["id"], "name": item["name"]} for item in data]

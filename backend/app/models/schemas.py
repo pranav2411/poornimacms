@@ -17,40 +17,39 @@ class ComplaintTimelineItem(BaseModel):
 
 class Complaint(BaseModel):
     id: str
-    room: str
-    category: str
+    complaintNo: str
     title: str
     description: str
+    location: str
+    departmentId: str
     status: ComplaintStatus
     priority: ComplaintPriority
-    assignedTo: Optional[str] = None
+    createdBy: str
+    assignedVendorId: Optional[str] = None
+    cancellationReason: Optional[str] = None
+    resolvedAt: Optional[str] = None
+    cancelledAt: Optional[str] = None
     timeline: List[ComplaintTimelineItem] = []
     createdAt: str
     updatedAt: str
-    workCompleted: Optional[bool] = None
-    otpVerified: Optional[bool] = None
-    lastReminderSent: Optional[str] = None
-    closeReason: Optional[str] = None
 
 
 class ComplaintCreate(BaseModel):
-    room: str = Field(..., min_length=1, max_length=50)
-    category: str = Field(..., min_length=2, max_length=60)
+    location: str = Field(..., min_length=1, max_length=255)
+    departmentId: str = Field(..., min_length=1)
     title: str = Field(..., min_length=3, max_length=120)
     description: str = Field(..., min_length=8, max_length=2000)
     priority: ComplaintPriority
+    createdBy: str = Field(..., min_length=1)
 
 
 class AssignVendorRequest(BaseModel):
-    vendor: str = Field(..., min_length=2, max_length=120)
+    vendorId: str = Field(..., min_length=1)
+    assignedBy: Optional[str] = Field(default=None, min_length=1)
 
 
 class CloseComplaintRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=1000)
-
-
-class VerifyOtpRequest(BaseModel):
-    otp: str = Field(..., min_length=6, max_length=6)
 
 
 class ReportIssueRequest(BaseModel):
@@ -74,4 +73,28 @@ class NotificationItem(BaseModel):
 
 
 class VendorItem(BaseModel):
+    id: str
     name: str
+
+
+class UserCreate(BaseModel):
+    firebaseUid: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=2, max_length=150)
+    email: str = Field(..., min_length=5, max_length=255)
+    role: str = Field(..., min_length=3, max_length=30)
+    departmentId: Optional[str] = None
+    isVerified: bool = False
+    isActive: bool = True
+
+
+class UserItem(BaseModel):
+    id: str
+    firebaseUid: str
+    name: str
+    email: str
+    role: str
+    departmentId: Optional[str] = None
+    isVerified: bool
+    isActive: bool
+    createdAt: str
+    updatedAt: str

@@ -1,102 +1,101 @@
+
 -- Complaint Management System Schema
 -- Firebase Auth + Supabase PostgreSQL + Cloudinary
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TABLE departments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) UNIQUE NOT NULL,
-  head_user_id UUID NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) UNIQUE NOT NULL,
+    head_user_id UUID NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  firebase_uid VARCHAR(255) UNIQUE NOT NULL,
-  name VARCHAR(150) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  role VARCHAR(30) NOT NULL CHECK (
-    role IN ('faculty','admin','vendor','super_admin')
-  ),
-  department_id UUID NULL,
-  is_verified BOOLEAN DEFAULT FALSE,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    firebase_uid VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(30) NOT NULL CHECK (
+        role IN ('faculty','admin','vendor','super_admin')
+    ),
+    department_id UUID NULL,
+    is_verified BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE complaints (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  complaint_no VARCHAR(30) UNIQUE NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  description TEXT NOT NULL,
-  location TEXT NOT NULL,
-  department_id UUID NOT NULL,
-  priority VARCHAR(20) NOT NULL CHECK (
-    priority IN ('low','medium','high')
-  ),
-  status VARCHAR(30) NOT NULL DEFAULT 'open' CHECK (
-    status IN (
-      'open',
-      'vendor_assigned',
-      'in_progress',
-      'done',
-      'resolved',
-      'cancelled'
-    )
-  ),
-  created_by UUID NOT NULL,
-  assigned_vendor_id UUID NULL,
-  cancellation_reason TEXT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  resolved_at TIMESTAMP NULL,
-  cancelled_at TIMESTAMP NULL
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_no VARCHAR(30) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    location TEXT NOT NULL,
+    department_id UUID NOT NULL,
+    priority VARCHAR(20) NOT NULL CHECK (
+        priority IN ('low','medium','high')
+    ),
+    status VARCHAR(30) NOT NULL DEFAULT 'open' CHECK (
+        status IN (
+            'open',
+            'vendor_assigned',
+            'in_progress',
+            'done',
+            'resolved',
+            'cancelled'
+        )
+    ),
+    created_by UUID NOT NULL,
+    assigned_vendor_id UUID NULL,
+    cancellation_reason TEXT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    resolved_at TIMESTAMP NULL,
+    cancelled_at TIMESTAMP NULL
 );
 
 CREATE TABLE complaint_images (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  complaint_id UUID NOT NULL,
-  public_id VARCHAR(255) NOT NULL,
-  secure_url TEXT NOT NULL,
-  uploaded_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL,
+    public_id VARCHAR(255) NOT NULL,
+    secure_url TEXT NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE complaint_assignments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  complaint_id UUID NOT NULL,
-  vendor_id UUID NOT NULL,
-  assigned_by UUID NOT NULL,
-  assigned_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL,
+    vendor_id UUID NOT NULL,
+    assigned_by UUID NOT NULL,
+    assigned_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE complaint_status_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  complaint_id UUID NOT NULL,
-  old_status VARCHAR(30),
-  new_status VARCHAR(30),
-  remarks TEXT,
-  changed_by UUID NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    complaint_id UUID NOT NULL,
+    old_status VARCHAR(30),
+    new_status VARCHAR(30),
+    remarks TEXT,
+    changed_by UUID NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE notifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  message TEXT NOT NULL,
-  is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE sos_alerts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  triggered_by UUID NOT NULL,
-  location TEXT,
-  message TEXT,
-  status VARCHAR(20) DEFAULT 'active',
-  created_at TIMESTAMP DEFAULT NOW(),
-  closed_at TIMESTAMP NULL
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    triggered_by UUID NOT NULL,
+    location TEXT,
+    message TEXT,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    closed_at TIMESTAMP NULL
 );
 
 -- Foreign Keys

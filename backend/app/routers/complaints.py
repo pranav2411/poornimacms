@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.core.config import settings
-from app.core.security import generate_otp, hash_otp, verify_otp
 from app.db.supabase import get_supabase
 from app.models.schemas import (
     AssignVendorRequest,
@@ -14,7 +12,6 @@ from app.models.schemas import (
     Complaint,
     ComplaintCreate,
     ReportIssueRequest,
-    VerifyOtpRequest,
 )
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
@@ -24,135 +21,173 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _serialize_complaint(row: Dict[str, Any]) -> Dict[str, Any]:
-    timeline_items = row.get("complaint_timeline") or []
+def _get_system_user_id(supabase: Any) -> str:
+    # Ensure a system user exists to satisfy NOT NULL foreign keys
+    resp = (
+        supabase.table("users").select("id").eq("firebase_uid", "__system__").limit(1).execute()
+    )
+    if resp.data:
+        return resp.data[0]["id"]
+    # create minimal system user
+    insert = {
+        "firebase_uid": "__system__",
+        "name": "System",
+        "email": "system@local",
+        "role": "admin",
+        "is_verified": True,
+    }
+    created = supabase.table("users").insert(insert).execute()
+    if not created.data:
+        raise HTTPException(status_code=500, detail="Failed to ensure system user")
+    return created.data[0]["id"]
+
+
+def _get_department(supabase: Any, department_id: str) -> Dict[str, Any]:
+    resp = supabase.table("departments").select("id, name").eq("id", department_id).limit(1).execute()
+    if not resp.data:
+        raise HTTPException(status_code=400, detail="Department not found")
+    return resp.data[0]
+
+
+def _serialize_complaint(
+    row: Dict[str, Any],
+    history: List[Dict[str, Any]],
+    assignment: Optional[Dict[str, Any]],
+    department_name: Optional[str],
+    vendor_name: Optional[str],
+) -> Dict[str, Any]:
     timeline = [
-        {
-            "label": item.get("label"),
-            "time": item.get("time"),
-            "remarks": item.get("remarks"),
-        }
-        for item in timeline_items
+        {"label": h.get("new_status") or h.get("remarks"), "time": h.get("created_at"), "remarks": h.get("remarks")} for h in history
     ]
 
     return {
-        "id": row.get("complaint_code"),
-        "room": row.get("room"),
-        "category": row.get("category"),
+        "id": row.get("complaint_no"),
+        "complaintNo": row.get("complaint_no"),
+        "room": row.get("location"),
+        "category": department_name,
         "title": row.get("title"),
         "description": row.get("description"),
+        "location": row.get("location"),
+        "departmentId": row.get("department_id"),
         "status": row.get("status"),
         "priority": row.get("priority"),
-        "assignedTo": row.get("assigned_vendor"),
+        "assignedTo": vendor_name,
+        "assignedVendorId": row.get("assigned_vendor_id"),
+        "createdBy": row.get("created_by"),
+        "cancellationReason": row.get("cancellation_reason"),
+        "resolvedAt": row.get("resolved_at"),
+        "cancelledAt": row.get("cancelled_at"),
         "timeline": timeline,
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
-        "workCompleted": row.get("work_completed"),
-        "otpVerified": row.get("otp_verified"),
-        "lastReminderSent": row.get("last_reminder_sent"),
-        "closeReason": row.get("close_reason"),
+        "workCompleted": row.get("status") in ("done", "resolved"),
+        "closeReason": row.get("cancellation_reason"),
     }
 
 
-def _append_timeline(complaint_id: str, label: str, remarks: Optional[str] = None) -> None:
+def _get_complaint_row(complaint_no: str) -> Dict[str, Any]:
     supabase = get_supabase()
-    payload = {
-        "complaint_id": complaint_id,
-        "label": label,
-        "time": _now_iso(),
-        "remarks": remarks,
-    }
-    supabase.table("complaint_timeline").insert(payload).execute()
-
-
-def _get_complaint_row(complaint_code: str) -> Dict[str, Any]:
-    supabase = get_supabase()
-    response = (
-        supabase.table("complaints")
-        .select(
-            "id, complaint_code, room, category, title, description, status, priority, "
-            "assigned_vendor, created_at, updated_at, work_completed, otp_verified, "
-            "last_reminder_sent, close_reason, otp_hash, otp_expires_at, "
-            "complaint_timeline(label,time,remarks)"
-        )
-        .eq("complaint_code", complaint_code)
-        .limit(1)
-        .execute()
-    )
-
-    data = response.data or []
+    resp = supabase.table("complaints").select("*").eq("complaint_no", complaint_no).limit(1).execute()
+    data = resp.data or []
     if not data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
-    return data[0]
+    row = data[0]
+
+    # fetch history
+    history_resp = (
+        supabase.table("complaint_status_history").select("old_status,new_status,remarks,changed_by,created_at").eq("complaint_id", row["id"]).order("created_at", desc=False).execute()
+    )
+    history = history_resp.data or []
+
+    # fetch latest assignment
+    assignment_resp = (
+        supabase.table("complaint_assignments").select("vendor_id,assigned_at,assigned_by").eq("complaint_id", row["id"]).order("assigned_at", desc=True).limit(1).execute()
+    )
+    assignment = (assignment_resp.data or [None])[0]
+
+    # department name
+    dept_resp = supabase.table("departments").select("name").eq("id", row.get("department_id")).limit(1).execute()
+    department_name = (dept_resp.data or [{}])[0].get("name")
+
+    # vendor name
+    vendor_name = None
+    if row.get("assigned_vendor_id"):
+        v = supabase.table("users").select("name").eq("id", row.get("assigned_vendor_id")).limit(1).execute()
+        vendor_name = (v.data or [{}])[0].get("name")
+
+    return {
+        "row": row,
+        "history": history,
+        "assignment": assignment,
+        "department_name": department_name,
+        "vendor_name": vendor_name,
+    }
 
 
-def _generate_complaint_code() -> str:
+def _generate_complaint_no() -> str:
     supabase = get_supabase()
     for _ in range(5):
-        code = f"CMP-{datetime.now(timezone.utc).year % 100:02d}{datetime.now(timezone.utc).month:02d}-{datetime.now(timezone.utc).day:02d}{datetime.now(timezone.utc).hour:02d}{datetime.now(timezone.utc).minute:02d}{datetime.now(timezone.utc).second:02d}"
-        existing = (
-            supabase.table("complaints")
-            .select("id")
-            .eq("complaint_code", code)
-            .limit(1)
-            .execute()
-        )
+        now = datetime.now(timezone.utc)
+        code = f"CMP-{now.year % 100:02d}{now.month:02d}-{now.day:02d}{now.hour:02d}{now.minute:02d}{now.second:02d}"
+        existing = supabase.table("complaints").select("id").eq("complaint_no", code).limit(1).execute()
         if not existing.data:
             return code
-    raise HTTPException(status_code=500, detail="Unable to allocate complaint code")
+    raise HTTPException(status_code=500, detail="Unable to allocate complaint number")
 
 
 @router.get("", response_model=List[Complaint])
-def list_complaints(
-    status_filter: Optional[str] = Query(default=None, alias="status"),
-    assigned_to: Optional[str] = Query(default=None, alias="assignedTo"),
-) -> List[Complaint]:
+def list_complaints(status_filter: Optional[str] = Query(default=None, alias="status"), assigned_to: Optional[str] = Query(default=None, alias="assignedTo")) -> List[Complaint]:
     supabase = get_supabase()
-    query = (
-        supabase.table("complaints")
-        .select(
-            "complaint_code, room, category, title, description, status, priority, "
-            "assigned_vendor, created_at, updated_at, work_completed, otp_verified, "
-            "last_reminder_sent, close_reason, complaint_timeline(label,time,remarks)"
-        )
-        .order("updated_at", desc=True)
-    )
-
+    query = supabase.table("complaints").select("*").order("updated_at", desc=True)
     if status_filter:
-        statuses = [item.strip() for item in status_filter.split(",") if item.strip()]
+        statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
         if statuses:
             query = query.in_("status", statuses)
-
     if assigned_to:
-        query = query.eq("assigned_vendor", assigned_to)
+        # try to find vendor user by name
+        user_resp = supabase.table("users").select("id").eq("name", assigned_to).limit(1).execute()
+        if user_resp.data:
+            vendor_id = user_resp.data[0]["id"]
+            query = query.eq("assigned_vendor_id", vendor_id)
+        else:
+            # no vendor found -> return empty
+            return []
 
     data = query.execute().data or []
-    return [_serialize_complaint(item) for item in data]
+    results: List[Dict[str, Any]] = []
+    for item in data:
+        # fetch history and assignment per complaint
+        info = _get_complaint_row(item["complaint_no"])
+        results.append(_serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name")))
+    return results
 
 
-@router.get("/{complaint_code}", response_model=Complaint)
-def get_complaint(complaint_code: str) -> Complaint:
-    row = _get_complaint_row(complaint_code)
-    return _serialize_complaint(row)
+@router.get("/{complaint_no}", response_model=Complaint)
+def get_complaint(complaint_no: str) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
 @router.post("", response_model=Complaint, status_code=status.HTTP_201_CREATED)
 def create_complaint(payload: ComplaintCreate) -> Complaint:
     supabase = get_supabase()
     now = _now_iso()
-    complaint_code = _generate_complaint_code()
+    complaint_no = _generate_complaint_no()
+
+    system_user_id = _get_system_user_id(supabase)
+    dept = _get_department(supabase, payload.departmentId)
+
     insert_payload = {
-        "complaint_code": complaint_code,
-        "room": payload.room,
-        "category": payload.category,
+        "complaint_no": complaint_no,
         "title": payload.title,
         "description": payload.description,
+        "location": payload.location,
+        "department_id": dept["id"],
         "priority": payload.priority,
-        "status": "Pending",
+        "status": "open",
+        "created_by": payload.createdBy or system_user_id,
         "created_at": now,
         "updated_at": now,
-        "work_completed": False,
-        "otp_verified": False,
     }
 
     response = supabase.table("complaints").insert(insert_payload).execute()
@@ -160,219 +195,158 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
         raise HTTPException(status_code=500, detail="Failed to create complaint")
 
     complaint_id = response.data[0]["id"]
-    _append_timeline(complaint_id, "Complaint registered")
+    # add initial status history
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": None,
+        "new_status": "open",
+        "remarks": "Complaint registered",
+        "changed_by": system_user_id,
+    }).execute()
 
-    row = _get_complaint_row(complaint_code)
-    return _serialize_complaint(row)
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
-@router.post("/{complaint_code}/assign", response_model=Complaint)
-def assign_vendor(complaint_code: str, payload: AssignVendorRequest) -> Complaint:
+@router.post("/{complaint_no}/assign", response_model=Complaint)
+def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
     supabase = get_supabase()
     now = _now_iso()
-    row = _get_complaint_row(complaint_code)
+    info = _get_complaint_row(complaint_no)
+    complaint_id = info["row"]["id"]
 
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "assigned_vendor": payload.vendor,
-                "status": "Assigned",
-                "updated_at": now,
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to assign vendor")
-
-    _append_timeline(row["id"], "Vendor assigned", f"Vendor: {payload.vendor}")
-
-    supabase.table("notifications").insert(
-        {
-            "title": f"{complaint_code} vendor assigned",
-            "timestamp": now,
+    system_user_id = _get_system_user_id(supabase)
+    # find or create vendor user by name
+    v_resp = supabase.table("users").select("id, name").eq("name", payload.vendor).eq("role", "vendor").limit(1).execute()
+    if v_resp.data:
+        vendor_id = v_resp.data[0]["id"]
+    else:
+        # create a vendor user stub
+        stub = {
+            "firebase_uid": f"vendor-{payload.vendor}-{int(datetime.now().timestamp())}",
+            "name": payload.vendor,
+            "email": f"{payload.vendor.replace(' ','').lower()}@example.local",
+            "role": "vendor",
+            "is_verified": True,
         }
-    ).execute()
+        created = supabase.table("users").insert(stub).execute()
+        if not created.data:
+            raise HTTPException(status_code=500, detail="Failed to create vendor user")
+        vendor_id = created.data[0]["id"]
 
-    updated = _get_complaint_row(complaint_code)
-    return _serialize_complaint(updated)
+    # record assignment
+    supabase.table("complaint_assignments").insert({
+        "complaint_id": complaint_id,
+        "vendor_id": vendor_id,
+        "assigned_by": system_user_id,
+    }).execute()
+
+    # update complaint
+    supabase.table("complaints").update({
+        "assigned_vendor_id": vendor_id,
+        "status": "vendor_assigned",
+        "updated_at": now,
+    }).eq("id", complaint_id).execute()
+
+    # add status history
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": info["row"].get("status"),
+        "new_status": "vendor_assigned",
+        "remarks": f"Vendor assigned: {payload.vendor}",
+        "changed_by": system_user_id,
+    }).execute()
+
+    # notify (notifications require user_id)
+    supabase.table("notifications").insert({
+        "user_id": system_user_id,
+        "title": f"{complaint_no} vendor assigned",
+        "message": f"Vendor {payload.vendor} assigned to {complaint_no}",
+    }).execute()
+
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
-@router.post("/{complaint_code}/mark-fixed", response_model=Complaint)
-def mark_fixed(complaint_code: str) -> Complaint:
+@router.post("/{complaint_no}/mark-fixed", response_model=Complaint)
+def mark_fixed(complaint_no: str) -> Complaint:
     supabase = get_supabase()
     now = _now_iso()
-    row = _get_complaint_row(complaint_code)
+    info = _get_complaint_row(complaint_no)
+    complaint_id = info["row"]["id"]
+    system_user_id = _get_system_user_id(supabase)
 
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "status": "Fixed",
-                "work_completed": True,
-                "updated_at": now,
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
+    supabase.table("complaints").update({
+        "status": "done",
+        "updated_at": now,
+        "resolved_at": now,
+    }).eq("id", complaint_id).execute()
 
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to update complaint")
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": info["row"].get("status"),
+        "new_status": "done",
+        "remarks": "Work completed",
+        "changed_by": system_user_id,
+    }).execute()
 
-    _append_timeline(row["id"], "Work completed")
-    updated = _get_complaint_row(complaint_code)
-    return _serialize_complaint(updated)
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
-@router.post("/{complaint_code}/otp")
-def generate_otp_for_complaint(complaint_code: str) -> Dict[str, str]:
+@router.post("/{complaint_no}/close", response_model=Complaint)
+def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Complaint:
     supabase = get_supabase()
-    row = _get_complaint_row(complaint_code)
-    otp = generate_otp()
-    otp_hash = hash_otp(otp)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.otp_ttl_minutes)
-
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "otp_hash": otp_hash,
-                "otp_expires_at": expires_at.isoformat(),
-                "updated_at": _now_iso(),
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to generate OTP")
-
-    _append_timeline(row["id"], "OTP generated")
-    return {"otp": otp, "expiresAt": expires_at.isoformat()}
-
-
-@router.post("/{complaint_code}/verify-otp", response_model=Complaint)
-def verify_complaint_otp(complaint_code: str, payload: VerifyOtpRequest) -> Complaint:
-    supabase = get_supabase()
-    row = _get_complaint_row(complaint_code)
-    otp_hash_value = row.get("otp_hash")
-    otp_expires_at = row.get("otp_expires_at")
-
-    if not otp_hash_value or not otp_expires_at:
-        raise HTTPException(status_code=400, detail="OTP has not been generated")
-
-    if datetime.fromisoformat(otp_expires_at) < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP has expired")
-
-    if not verify_otp(payload.otp, otp_hash_value):
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "otp_verified": True,
-                "otp_hash": None,
-                "otp_expires_at": None,
-                "updated_at": _now_iso(),
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to verify OTP")
-
-    _append_timeline(row["id"], "OTP verified")
-    updated = _get_complaint_row(complaint_code)
-    return _serialize_complaint(updated)
-
-
-@router.post("/{complaint_code}/close", response_model=Complaint)
-def close_complaint(complaint_code: str, payload: CloseComplaintRequest) -> Complaint:
-    supabase = get_supabase()
-    row = _get_complaint_row(complaint_code)
+    info = _get_complaint_row(complaint_no)
+    complaint_id = info["row"]["id"]
     now = _now_iso()
+    system_user_id = _get_system_user_id(supabase)
 
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "status": "Closed",
-                "close_reason": payload.reason,
-                "updated_at": now,
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
+    supabase.table("complaints").update({
+        "status": "cancelled",
+        "cancellation_reason": payload.reason,
+        "updated_at": now,
+        "cancelled_at": now,
+    }).eq("id", complaint_id).execute()
 
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to close complaint")
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": info["row"].get("status"),
+        "new_status": "cancelled",
+        "remarks": payload.reason,
+        "changed_by": system_user_id,
+    }).execute()
 
-    _append_timeline(row["id"], "Complaint closed", payload.reason)
-    updated = _get_complaint_row(complaint_code)
-    return _serialize_complaint(updated)
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
-@router.post("/{complaint_code}/remind", response_model=Complaint)
-def send_reminder(complaint_code: str) -> Complaint:
+@router.post("/{complaint_no}/remind", response_model=Complaint)
+def send_reminder(complaint_no: str) -> Complaint:
     supabase = get_supabase()
-    row = _get_complaint_row(complaint_code)
-    last_reminder = row.get("last_reminder_sent")
-    now = datetime.now(timezone.utc)
+    info = _get_complaint_row(complaint_no)
+    system_user_id = _get_system_user_id(supabase)
 
-    if last_reminder:
-        last_dt = datetime.fromisoformat(last_reminder)
-        if now - last_dt < timedelta(hours=24):
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Reminders are limited to once every 24 hours",
-            )
+    supabase.table("notifications").insert({
+        "user_id": system_user_id,
+        "title": f"Reminder sent for {complaint_no}",
+        "message": f"Reminder for complaint {complaint_no}",
+    }).execute()
 
-    response = (
-        supabase.table("complaints")
-        .update(
-            {
-                "last_reminder_sent": now.isoformat(),
-                "updated_at": now.isoformat(),
-            }
-        )
-        .eq("id", row["id"])
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to send reminder")
-
-    supabase.table("notifications").insert(
-        {
-            "title": f"Reminder sent for {complaint_code}",
-            "timestamp": now.isoformat(),
-        }
-    ).execute()
-
-    updated = _get_complaint_row(complaint_code)
-    return _serialize_complaint(updated)
+    info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
 
 
-@router.post("/{complaint_code}/report", status_code=status.HTTP_201_CREATED)
-def report_issue(complaint_code: str, payload: ReportIssueRequest) -> Dict[str, str]:
+@router.post("/{complaint_no}/report", status_code=status.HTTP_201_CREATED)
+def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, str]:
     supabase = get_supabase()
-    _ = _get_complaint_row(complaint_code)
-    now = _now_iso()
+    info = _get_complaint_row(complaint_no)
+    system_user_id = _get_system_user_id(supabase)
 
-    supabase.table("notifications").insert(
-        {
-            "title": f"Report submitted for {complaint_code}: {payload.reason}",
-            "timestamp": now,
-        }
-    ).execute()
+    supabase.table("notifications").insert({
+        "user_id": system_user_id,
+        "title": f"Report submitted for {complaint_no}: {payload.reason}",
+        "message": payload.details or payload.reason,
+    }).execute()
 
     return {"status": "reported"}
