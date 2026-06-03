@@ -80,6 +80,7 @@ class VendorItem(BaseModel):
 class UserCreate(BaseModel):
     firebaseUid: str = Field(..., min_length=1, max_length=255)
     name: str = Field(..., min_length=2, max_length=150)
+    avatarUrl: Optional[str] = Field(default=None, max_length=1000)
     email: str = Field(..., min_length=5, max_length=255)
     role: str = Field(..., min_length=3, max_length=30)
     departmentId: Optional[str] = None
@@ -87,10 +88,21 @@ class UserCreate(BaseModel):
     isActive: bool = True
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=150)
+    avatarUrl: Optional[str] = Field(default=None, max_length=1000)
+    email: Optional[str] = Field(default=None, min_length=5, max_length=255)
+    role: Optional[str] = Field(default=None, min_length=3, max_length=30)
+    departmentId: Optional[str] = None
+    isVerified: Optional[bool] = None
+    isActive: Optional[bool] = None
+
+
 class UserItem(BaseModel):
     id: str
     firebaseUid: str
     name: str
+    avatarUrl: Optional[str] = None
     email: str
     role: str
     departmentId: Optional[str] = None

@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { signOut } from "firebase/auth";
 import Sidebar from "@/components/Sidebar";
 import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
+import { getFirebaseAuth } from "@/lib/firebase";
 import type { UserRole } from "@/lib/role-context";
 
 export default function DashboardShell({
@@ -25,7 +28,29 @@ export default function DashboardShell({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [storedUser, setStoredUser] = useState<{
+    name?: string;
+    avatarUrl?: string;
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const rawUser = window.localStorage.getItem("poornima-user");
+    if (!rawUser) return;
+
+    try {
+      const parsed = JSON.parse(rawUser) as {
+        name?: string;
+        avatarUrl?: string;
+      };
+      setStoredUser(parsed);
+    } catch {
+      setStoredUser(null);
+    }
+  }, []);
+
+  const resolvedUserName = storedUser?.name?.trim() || userName;
+  const resolvedAvatarUrl = storedUser?.avatarUrl?.trim() || avatarUrl;
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -53,7 +78,10 @@ export default function DashboardShell({
 
   const handleLogout = () => {
     setMenuOpen(false);
-    router.push("/login");
+    window.localStorage.removeItem("poornima-user");
+    void signOut(getFirebaseAuth()).finally(() => {
+      router.replace("/login");
+    });
   };
 
   const handleProfile = () => {
@@ -145,19 +173,21 @@ export default function DashboardShell({
                   type="button"
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  aria-label={`Open user menu for ${userName}`}
+                  aria-label={`Open user menu for ${resolvedUserName}`}
                   onClick={() => setMenuOpen((prev) => !prev)}
                   className="flex h-10 w-10 items-center justify-center gap-2 rounded-full border-border bg-surface p-0 text-heading hover:bg-transparent hover:text-heading sm:h-12 sm:w-auto sm:px-4"
                 >
                   <div className="h-9 w-9 overflow-hidden rounded-full bg-border">
-                    <img
-                      src={avatarUrl}
-                      alt={userName}
+                    <Image
+                      src={resolvedAvatarUrl}
+                      alt={resolvedUserName}
+                      width={36}
+                      height={36}
                       className="h-full w-full object-cover"
                     />
                   </div>
                   <span className="hidden text-sm font-semibold sm:inline">
-                    {userName}
+                    {resolvedUserName}
                   </span>
                   <svg
                     viewBox="0 0 20 20"

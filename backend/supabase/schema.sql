@@ -14,6 +14,7 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   firebase_uid VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(150) NOT NULL,
+  avatar_url TEXT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   role VARCHAR(30) NOT NULL CHECK (
     role IN ('faculty','admin','vendor','super_admin')

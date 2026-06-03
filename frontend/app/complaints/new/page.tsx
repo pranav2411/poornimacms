@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { parse } from "cookie";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import GlassButton from "@/components/GlassButton";
@@ -12,6 +13,19 @@ import type { Complaint } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const steps = ["Room verification", "Complaint details", "Review & submit"];
+
+const DEFAULT_CREATED_BY = "system";
+const CATEGORY_TO_DEPARTMENT_ID: Record<string, string> = {
+  Electrical: "D1",
+  Plumbing: "D2",
+  Carpentry: "D3",
+  "IT/AV": "D4",
+  Housekeeping: "D5",
+  Other: "D6",
+};
+
+const resolveDepartmentId = (selectedCategory: string) =>
+  CATEGORY_TO_DEPARTMENT_ID[selectedCategory] || "D6";
 
 export default function NewComplaintPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -86,15 +100,19 @@ export default function NewComplaintPage() {
   }, [room]);
 
   const handleSubmit = async () => {
-    if (!room || !category || !title || !description) return;
+    const departmentId = resolveDepartmentId(category);
+    const cookies = typeof document !== "undefined" ? parse(document.cookie || "") : {};
+    const createdBy = cookies.user_id || DEFAULT_CREATED_BY;
+    if (!room || !category || !title || !description || !departmentId || !createdBy) return;
     setIsSubmitting(true);
     try {
       await createComplaint({
-        room,
-        category,
+        location: room,
+        departmentId,
         title,
         description,
-        priority,
+        priority: priority.toLowerCase(),
+        createdBy,
       });
       setIsSubmitting(false);
       setCurrentStep(0);

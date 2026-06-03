@@ -68,11 +68,12 @@ export const getComplaint = (complaintId: string) =>
   request<Complaint>(`/complaints/${complaintId}`);
 
 export const createComplaint = (payload: {
-  room: string;
-  category: string;
+  location: string;
+  departmentId: string;
   title: string;
   description: string;
   priority: string;
+  createdBy: string;
 }) => request<Complaint>("/complaints", { method: "POST", body: payload });
 
 export const assignVendor = (complaintId: string, vendor: string) =>
@@ -127,3 +128,70 @@ export const getStats = async () => {
 };
 
 export const getCategories = () => request<string[]>("/meta/categories");
+
+export const getUserByFirebaseUid = (firebaseUid: string) =>
+  request<{
+    id: string;
+    firebaseUid: string;
+    name: string;
+    avatarUrl?: string | null;
+    email: string;
+    role: string;
+    departmentId?: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>(`/users/firebase/${firebaseUid}`);
+
+export const createUser = (payload: {
+  firebaseUid: string;
+  name: string;
+  avatarUrl?: string | null;
+  email: string;
+  role: string;
+  departmentId?: string | null;
+  isVerified?: boolean;
+  isActive?: boolean;
+}) => request<{
+  id: string;
+  firebaseUid: string;
+  name: string;
+  avatarUrl?: string | null;
+  email: string;
+  role: string;
+  departmentId?: string | null;
+  isVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}>("/users", { method: "POST", body: payload });
+
+export const updateUserByFirebaseUid = (
+  firebaseUid: string,
+  payload: {
+    name?: string;
+    avatarUrl?: string | null;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isVerified?: boolean;
+    isActive?: boolean;
+  }
+) =>
+  request<{
+    id: string;
+    firebaseUid: string;
+    name: string;
+    avatarUrl?: string | null;
+    email: string;
+    role: string;
+    departmentId?: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>(`/users/firebase/${firebaseUid}`, {
+    method: "PATCH",
+    body: payload,
+  });

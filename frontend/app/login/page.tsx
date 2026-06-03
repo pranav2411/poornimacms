@@ -1,10 +1,191 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { FirebaseError } from "firebase/app";
+import { getRedirectResult, signInWithPopup, signOut } from "firebase/auth";
+import { getFirebaseAuth, getGoogleProvider } from "@/lib/firebase";
+import {
+  createUser,
+  getUserByFirebaseUid,
+  updateUserByFirebaseUid,
+} from "@/lib/api";
+
+type LoginState = "idle" | "loading" | "error";
+
+const roleToDashboard: Record<string, string> = {
+  faculty: "/dashboard/faculty",
+  vendor: "/dashboard/vendor",
+  admin: "/dashboard/admin",
+  super_admin: "/dashboard/superadmin",
+};
+
+const isAllowedCampusEmail = (email: string | null | undefined) =>
+  Boolean(email && email.toLowerCase().endsWith("@poornima.org"));
+
+const getGoogleProfile = (user: {
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}) => ({
+  name: user.displayName?.trim() || user.email || "",
+  avatarUrl: user.photoURL?.trim() || "/user-no-av.png",
+  email: user.email || "",
+});
+
+const storeUserProfile = (profile: {
+  uid: string;
+  email: string | null;
+  name: string;
+  role: string;
+  avatarUrl?: string | null;
+}) => {
+  window.localStorage.setItem(
+    "poornima-user",
+    JSON.stringify({
+      uid: profile.uid,
+      email: profile.email,
+      name: profile.name,
+      role: profile.role,
+      avatarUrl: profile.avatarUrl ?? "/user-no-av.png",
+    })
+  );
+};
+
+async function syncUserProfile(user: {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}) {
+  const googleProfile = getGoogleProfile(user);
+  let profile;
+
+  try {
+    profile = await getUserByFirebaseUid(user.uid);
+  } catch (err) {
+    if (err instanceof Error && err.message === "User not found") {
+      profile = await createUser({
+        firebaseUid: user.uid,
+        name: googleProfile.name,
+        avatarUrl: googleProfile.avatarUrl,
+        email: googleProfile.email,
+        role: "faculty",
+        isVerified: true,
+        isActive: true,
+      });
+    } else {
+      throw err;
+    }
+  }
+
+  const needsRefresh =
+    profile.name !== googleProfile.name ||
+    (profile.avatarUrl ?? "/user-no-av.png") !== googleProfile.avatarUrl ||
+    profile.email !== googleProfile.email;
+
+  if (needsRefresh) {
+    profile = await updateUserByFirebaseUid(user.uid, {
+      name: googleProfile.name,
+      avatarUrl: googleProfile.avatarUrl,
+      email: googleProfile.email,
+    });
+  }
+
+  return profile;
+}
 
 export default function LoginPage() {
   const router = useRouter();
+  const [state, setState] = useState<LoginState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const finishRedirectLogin = async () => {
+      try {
+        const auth = getFirebaseAuth();
+        const result = await getRedirectResult(auth);
+        const user = result?.user ?? auth.currentUser;
+        if (!user) return;
+
+        if (!isAllowedCampusEmail(user.email)) {
+          setState("error");
+          setMessage("Use your @poornima.org Google account to sign in.");
+          return;
+        }
+
+        const profile = await syncUserProfile(user);
+
+        storeUserProfile({
+          uid: user.uid,
+          email: user.email,
+          name: profile.name,
+          role: profile.role,
+          avatarUrl: profile.avatarUrl,
+        });
+
+        const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
+        router.replace(target);
+      } catch (error) {
+        if (
+          error instanceof FirebaseError &&
+          error.code === "auth/no-auth-event"
+        ) {
+          return;
+        }
+
+        setState("error");
+        setMessage(
+          error instanceof Error ? error.message : "Could not finish sign in."
+        );
+      }
+    };
+
+    finishRedirectLogin();
+  }, [router]);
+
+  const handleGoogleLogin = async () => {
+    setState("loading");
+    setMessage(null);
+
+    try {
+      const auth = getFirebaseAuth();
+      const googleProvider = getGoogleProvider();
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      if (!isAllowedCampusEmail(user.email)) {
+        await signOut(auth);
+        setState("error");
+        setMessage("Use your @poornima.org Google account to sign in.");
+        return;
+      }
+
+      const profile = await syncUserProfile(user);
+
+      const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
+
+      storeUserProfile({
+        uid: user.uid,
+        email: user.email,
+        name: profile.name,
+        role: profile.role,
+        avatarUrl: profile.avatarUrl,
+      });
+      router.replace(target);
+    } catch (error) {
+      if (error instanceof FirebaseError && error.code === "auth/popup-closed-by-user") {
+        setState("idle");
+        return;
+      }
+
+      setState("error");
+      setMessage(
+        error instanceof Error ? error.message : "Google sign-in failed."
+      );
+    }
+  };
 
   return (
     <div
@@ -28,10 +209,16 @@ export default function LoginPage() {
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-500">
             Keep campus complaints moving with the quickest possible resolution.
           </p>
+          {message && (
+            <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {message}
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => router.push("/dashboard/faculty")}
-            className="mt-10 inline-flex w-full items-center justify-center gap-3 rounded-full border border-black bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.12)]"
+            onClick={handleGoogleLogin}
+            disabled={state === "loading"}
+            className="mt-10 inline-flex w-full items-center justify-center gap-3 rounded-full border border-black bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.12)] disabled:cursor-not-allowed disabled:opacity-70"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
               <svg
@@ -58,7 +245,7 @@ export default function LoginPage() {
                 <path fill="none" d="M0 0h48v48H0z" />
               </svg>
             </span>
-            Login with Google
+            {state === "loading" ? "Connecting to Google..." : "Login with Google"}
           </button>
           <p className="mt-6 text-xs text-slate-500">
             Only @poornima.org accounts are permitted.
