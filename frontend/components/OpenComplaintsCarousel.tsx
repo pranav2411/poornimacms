@@ -9,6 +9,7 @@ import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/Skeleton";
 import {
   closeComplaint,
   generateOtp,
@@ -19,9 +20,16 @@ import {
 import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
 
+const priorityStyles: Record<string, string> = {
+  low: "bg-fixed/15 text-fixed border-fixed/30",
+  medium: "bg-pending/15 text-pending border-pending/30",
+  high: "bg-red-500/15 text-red-500 border-red-500/30",
+};
+
 export default function OpenComplaintsCarousel() {
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isNavHovered, setIsNavHovered] = useState(false);
@@ -64,7 +72,7 @@ export default function OpenComplaintsCarousel() {
   const [remindVendor, setRemindVendor] = useState<Complaint | null>(null);
   const [verifyOTP, setVerifyOTP] = useState<Complaint | null>(null);
   const [reportComplaint, setReportComplaint] = useState<Complaint | null>(null);
-  
+
   // State for actions
   const [closeReason, setCloseReason] = useState("");
   const [generatedOTP, setGeneratedOTP] = useState<string | null>(null);
@@ -77,32 +85,37 @@ export default function OpenComplaintsCarousel() {
   useEffect(() => {
     const media = window.matchMedia("(max-width: 768px)");
     const update = () => setIsCompact(media.matches);
+
     update();
-    if ("addEventListener" in media) {
-      media.addEventListener("change", update);
-    } else {
-      media.addListener(update);
-    }
+    media.addEventListener("change", update);
 
     let isMounted = true;
 
     const loadComplaints = async () => {
       try {
+        setIsLoading(true);
         const data = await getComplaints();
-        if (isMounted) setComplaints(data);
-      } catch {
-        if (isMounted) setComplaints([]);
+        if (isMounted) {
+          setComplaints(data);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setComplaints([]);
+          setIsLoading(false);
+          addToast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to load open complaints",
+            variant: "destructive",
+          });
+        }
       }
     };
 
     loadComplaints();
     return () => {
       isMounted = false;
-      if ("removeEventListener" in media) {
-        media.removeEventListener("change", update);
-      } else {
-        media.removeListener(update);
-      }
+      media.removeEventListener("change", update);
     };
   }, []);
 
@@ -275,7 +288,41 @@ export default function OpenComplaintsCarousel() {
           </div>
         </div>
 
-        {openComplaints.length === 0 ? (
+        {isLoading ? (
+          <div className="mt-6 animate-pulse">
+            <div className="relative mx-auto flex items-center justify-center gap-6 overflow-hidden">
+              {/* Left Card Placeholder */}
+              <div className="hidden md:block h-[460px] w-[300px] flex-none rounded-[2rem] border border-border/40 bg-surface/40 p-6">
+                <Skeleton className="h-4 w-1/3 mb-4" />
+                <Skeleton className="h-6 w-2/3 mb-2" />
+                <Skeleton className="h-4 w-1/2 mb-6" />
+                <Skeleton className="h-24 w-full rounded-2xl mb-4" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </div>
+
+              {/* Center Card Placeholder */}
+              <div className="h-[460px] w-[380px] max-w-full flex-none rounded-[2rem] border border-border/80 bg-surface/70 p-6 shadow-md relative -translate-y-1">
+                <Skeleton className="h-4 w-1/4 mb-4" />
+                <Skeleton className="h-7 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-1/2 mb-6" />
+                <Skeleton className="h-28 w-full rounded-2xl mb-6" />
+                <div className="flex gap-3">
+                  <Skeleton className="h-10 w-24 rounded-xl" />
+                  <Skeleton className="h-10 w-24 rounded-xl" />
+                </div>
+              </div>
+
+              {/* Right Card Placeholder */}
+              <div className="hidden md:block h-[460px] w-[300px] flex-none rounded-[2rem] border border-border/40 bg-surface/40 p-6">
+                <Skeleton className="h-4 w-1/3 mb-4" />
+                <Skeleton className="h-6 w-2/3 mb-2" />
+                <Skeleton className="h-4 w-1/2 mb-6" />
+                <Skeleton className="h-24 w-full rounded-2xl mb-4" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        ) : openComplaints.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-border bg-surface/70 p-6 text-center">
             <p className="text-sm font-semibold text-heading">
               No open complaints right now.
@@ -351,11 +398,11 @@ export default function OpenComplaintsCarousel() {
                         transition={transition}
                         className={cn(
                           "group relative flex-none overflow-hidden rounded-[2rem] border border-border/80",
-                          "bg-surface/90 shadow-[0_18px_50px_rgba(15,23,42,0.08)] outline-none",
+                          "bg-surface/90 backdrop-blur-md shadow-[0_12px_40px_rgba(0,0,0,0.03)] outline-none",
                           "focus-visible:ring-2 focus-visible:ring-accent/40"
                         )}
                       >
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(26,63,170,0.08),transparent_48%)]" />
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(26,63,170,0.04),transparent_48%)]" />
                         <div className="relative flex h-full flex-col gap-3 p-5 md:p-6">
                           <div className="flex items-start justify-between gap-4">
                             <div>
@@ -371,8 +418,15 @@ export default function OpenComplaintsCarousel() {
                             </div>
                             <div className="flex flex-col items-end gap-2">
                               <StatusPill status={complaint.status} />
-                              <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-heading">
-                                {complaint.priority} priority
+                              <span
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-xs font-medium",
+                                  priorityStyles[complaint.priority.toLowerCase()] ||
+                                    "bg-muted/15 text-muted border-muted/30"
+                                )}
+                              >
+                                {complaint.priority.charAt(0).toUpperCase() +
+                                  complaint.priority.slice(1).toLowerCase()}
                               </span>
                             </div>
                           </div>

@@ -7,9 +7,10 @@ import { getComplaint } from "@/lib/api";
 export default async function FacultyComplaintDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const complaint = await getComplaint(params.id);
+  const { id } = await params;
+  const complaint = await getComplaint(id);
 
   return (
     <DashboardShell

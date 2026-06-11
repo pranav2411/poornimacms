@@ -123,7 +123,11 @@
       transparent
     );
     border: 1px solid var(--color-border);
-    box-shadow: 0 8px 32px rgba(26, 63, 170, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 
+      0 4px 30px rgba(0, 0, 0, 0.03),
+      0 8px 32px rgba(26, 63, 170, 0.04);
   }
 
   .glass-edge-glow {

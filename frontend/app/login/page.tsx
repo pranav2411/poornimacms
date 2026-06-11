@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FirebaseError } from "firebase/app";
-import { getRedirectResult, signInWithPopup, signOut } from "firebase/auth";
+import { getRedirectResult, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { getFirebaseAuth, getGoogleProvider } from "@/lib/firebase";
+import { authenticateCredentials } from "./actions";
 import {
   createUser,
   getUserByFirebaseUid,
   updateUserByFirebaseUid,
+  getUserByEmail,
+  updateUserById,
 } from "@/lib/api";
 
 type LoginState = "idle" | "loading" | "error";
@@ -18,6 +21,7 @@ const roleToDashboard: Record<string, string> = {
   faculty: "/dashboard/faculty",
   vendor: "/dashboard/vendor",
   admin: "/dashboard/admin",
+  superadmin: "/dashboard/superadmin",
   super_admin: "/dashboard/superadmin",
 };
 
@@ -68,14 +72,41 @@ async function syncUserProfile(user: {
     profile = await getUserByFirebaseUid(user.uid);
   } catch (err) {
     if (err instanceof Error && err.message === "User not found") {
-      profile = await createUser({
-        firebaseUid: user.uid,
-        name: googleProfile.name,
-        email: googleProfile.email,
-        role: "faculty",
-        isVerified: true,
-        isActive: true,
-      });
+      // If not found by firebase uid, check if they were pre-created by email!
+      if (googleProfile.email) {
+        try {
+          const preCreatedUser = await getUserByEmail(googleProfile.email);
+          // If found by email, link their firebaseUid and set their name from Google
+          profile = await updateUserById(preCreatedUser.id, {
+            firebaseUid: user.uid,
+            name: preCreatedUser.name || googleProfile.name,
+          });
+        } catch (emailErr) {
+          if (emailErr instanceof Error && emailErr.message === "User not found") {
+            // Not found by email either, proceed with creating a new user
+            profile = await createUser({
+              firebaseUid: user.uid,
+              name: googleProfile.name,
+              email: googleProfile.email,
+              role: "faculty",
+              isVerified: true,
+              isActive: true,
+            });
+          } else {
+            throw emailErr;
+          }
+        }
+      } else {
+        // No email in profile, just create new user
+        profile = await createUser({
+          firebaseUid: user.uid,
+          name: googleProfile.name,
+          email: googleProfile.email,
+          role: "faculty",
+          isVerified: true,
+          isActive: true,
+        });
+      }
     } else {
       throw err;
     }
@@ -83,25 +114,50 @@ async function syncUserProfile(user: {
 
   const needsRefresh =
     profile.name !== googleProfile.name ||
-    profile.email !== googleProfile.email;
+    profile.email !== googleProfile.email ||
+    !profile.firebaseUid;
 
   if (needsRefresh) {
-    profile = await updateUserByFirebaseUid(user.uid, {
-      name: googleProfile.name,
-      email: googleProfile.email,
-    });
+    if (profile.firebaseUid) {
+      profile = await updateUserByFirebaseUid(profile.firebaseUid, {
+        name: googleProfile.name,
+        email: googleProfile.email,
+      });
+    } else {
+      profile = await updateUserById(profile.id, {
+        firebaseUid: user.uid,
+        name: googleProfile.name,
+        email: googleProfile.email,
+      });
+    }
   }
 
   return {
     ...profile,
+    name: profile.name || googleProfile.name || "User",
+    role: profile.role || "faculty",
+    email: profile.email || googleProfile.email || "",
     avatarUrl: googleProfile.avatarUrl,
   };
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [state, setState] = useState<LoginState>("idle");
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      setState("error");
+      if (errorParam === "AccessDenied") {
+        setMessage("Use your @poornima.org Google account to sign in, and ensure your account has not been denied.");
+      } else {
+        setMessage(`Sign-in failed: ${errorParam}`);
+      }
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const finishRedirectLogin = async () => {
@@ -111,6 +167,8 @@ export default function LoginPage() {
         const user = result?.user ?? auth.currentUser;
         if (!user) return;
 
+        setState("loading");
+
         if (!isAllowedCampusEmail(user.email)) {
           setState("error");
           setMessage("Use your @poornima.org Google account to sign in.");
@@ -118,6 +176,24 @@ export default function LoginPage() {
         }
 
         const profile = await syncUserProfile(user);
+        const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
+
+        // Synchronize NextAuth session via Server Action
+        const nextAuthResult = await authenticateCredentials({
+          uid: user.uid,
+          email: user.email as string,
+          name: profile.name,
+          image: profile.avatarUrl || user.photoURL || "",
+          redirectTo: target,
+        });
+
+        if (nextAuthResult?.error) {
+          console.error("NextAuth signin error:", nextAuthResult.error);
+          await firebaseSignOut(auth);
+          setState("error");
+          setMessage(`Could not establish NextAuth session: ${nextAuthResult.error}`);
+          return;
+        }
 
         storeUserProfile({
           id: profile.id,
@@ -128,7 +204,6 @@ export default function LoginPage() {
           avatarUrl: profile.avatarUrl,
         });
 
-        const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
         router.replace(target);
       } catch (error) {
         if (
@@ -159,15 +234,31 @@ export default function LoginPage() {
       const user = result.user;
 
       if (!isAllowedCampusEmail(user.email)) {
-        await signOut(auth);
+        await firebaseSignOut(auth);
         setState("error");
         setMessage("Use your @poornima.org Google account to sign in.");
         return;
       }
 
       const profile = await syncUserProfile(user);
-
       const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
+
+      // Synchronize NextAuth session via Server Action
+      const nextAuthResult = await authenticateCredentials({
+        uid: user.uid,
+        email: user.email as string,
+        name: profile.name,
+        image: profile.avatarUrl || user.photoURL || "",
+        redirectTo: target,
+      });
+
+      if (nextAuthResult?.error) {
+        console.error("NextAuth signin error:", nextAuthResult.error);
+        await firebaseSignOut(auth);
+        setState("error");
+        setMessage(`Could not establish NextAuth session: ${nextAuthResult.error}`);
+        return;
+      }
 
       storeUserProfile({
         id: profile.id,
@@ -177,6 +268,7 @@ export default function LoginPage() {
         role: profile.role,
         avatarUrl: profile.avatarUrl,
       });
+
       router.replace(target);
     } catch (error) {
       if (error instanceof FirebaseError && error.code === "auth/popup-closed-by-user") {
@@ -276,5 +368,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb]">
+          <div className="text-slate-500 font-semibold animate-pulse">Loading...</div>
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { signOut } from "firebase/auth";
+import { signOut as firebaseSignOut } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
+import { signOut, useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
-import { getFirebaseAuth } from "@/lib/firebase";
 import type { UserRole } from "@/lib/role-context";
 
 export default function DashboardShell({
@@ -26,6 +27,7 @@ export default function DashboardShell({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [storedUser, setStoredUser] = useState<{
@@ -49,8 +51,8 @@ export default function DashboardShell({
     }
   }, []);
 
-  const resolvedUserName = storedUser?.name?.trim() || userName;
-  const resolvedAvatarUrl = storedUser?.avatarUrl?.trim() || avatarUrl;
+  const resolvedUserName = session?.user?.name || storedUser?.name?.trim() || userName;
+  const resolvedAvatarUrl = session?.user?.image || storedUser?.avatarUrl?.trim() || avatarUrl || "/user-no-av.png";
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -79,14 +81,14 @@ export default function DashboardShell({
   const handleLogout = () => {
     setMenuOpen(false);
     window.localStorage.removeItem("poornima-user");
-    void signOut(getFirebaseAuth()).finally(() => {
-      router.replace("/login");
+    void firebaseSignOut(getFirebaseAuth()).finally(() => {
+      void signOut({ callbackUrl: "/login" });
     });
   };
 
   const handleProfile = () => {
     setMenuOpen(false);
-    router.push(`/dashboard/${role}`);
+    router.push(`/dashboard/${session?.user?.role || role}`);
   };
 
   const handleHelp = () => {
@@ -207,6 +209,20 @@ export default function DashboardShell({
                     role="menu"
                     className="absolute right-0 mt-3 w-52 rounded-2xl border border-border bg-surface/95 p-2 shadow-lg"
                   >
+                    {session?.user?.role === "superadmin" && role !== "superadmin" && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          router.push("/dashboard/superadmin");
+                        }}
+                        size="sm"
+                        className="mb-2 w-full justify-start border-primary/20 bg-primary/5 text-primary hover:bg-primary hover:text-surface font-semibold"
+                        role="menuitem"
+                      >
+                        Superadmin Panel
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       onClick={handleProfile}

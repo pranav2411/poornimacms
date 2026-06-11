@@ -1,9 +1,8 @@
 import DashboardShell from "@/components/DashboardShell";
 import OpenComplaintsCarousel from "@/components/OpenComplaintsCarousel";
 import StatsCharts from "@/components/StatsCharts";
-import { Button } from "@/components/ui/button";
+import SosFloatingButton from "@/components/SosFloatingButton";
 import { getStats } from "@/lib/api";
-import Link from "next/link";
 
 export default async function FacultyDashboardPage() {
   const facultyStats = await getStats();
@@ -31,15 +30,8 @@ export default async function FacultyDashboardPage() {
           </div>
         )}
       </div>
-      <Button
-        asChild
-        size="icon-lg"
-        className="fixed bottom-5 right-5 z-30 rounded-full border-accent bg-accent text-surface shadow-lg hover:bg-transparent hover:text-accent sm:bottom-8 sm:right-8"
-      >
-        <Link href="/complaints/new" aria-label="File a new complaint">
-          +
-        </Link>
-      </Button>
+      <SosFloatingButton />
     </DashboardShell>
   );
 }
+

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { createComplaint, getCategories, getComplaints } from "@/lib/api";
 import type { Complaint } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/lib/toast";
 
 const steps = ["Room verification", "Complaint details", "Review & submit"];
 
@@ -29,6 +30,7 @@ const resolveDepartmentId = (selectedCategory: string) =>
   CATEGORY_TO_DEPARTMENT_ID[selectedCategory] || "559f62c2-a3f7-476d-b95c-a22ae215aa0b";
 
 export default function NewComplaintPage() {
+  const { addToast } = useToast();
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [room, setRoom] = useState("");
@@ -40,6 +42,7 @@ export default function NewComplaintPage() {
   const [priority, setPriority] = useState("Medium");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isCheckingRoom, setIsCheckingRoom] = useState(false);
   const [submittedComplaint, setSubmittedComplaint] = useState<Complaint | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
 
@@ -83,17 +86,30 @@ export default function NewComplaintPage() {
   useEffect(() => {
     if (!room) {
       setComplaints([]);
+      setIsCheckingRoom(false);
       return;
     }
 
     let isMounted = true;
+    setIsCheckingRoom(true);
 
     const loadComplaints = async () => {
       try {
         const data = await getComplaints();
-        if (isMounted) setComplaints(data);
-      } catch {
-        if (isMounted) setComplaints([]);
+        if (isMounted) {
+          setComplaints(data);
+          setIsCheckingRoom(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setComplaints([]);
+          setIsCheckingRoom(false);
+          addToast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to load room complaints check",
+            variant: "destructive",
+          });
+        }
       }
     };
 
@@ -187,7 +203,7 @@ export default function NewComplaintPage() {
                 <div className="rounded-2xl border border-pending/40 bg-pending/15 p-4 text-sm text-body">
                   These complaints are already registered for this room -- please check before submitting
                 </div>
-                <RoomComplaints complaints={roomComplaints} expanded={showRoomPanel} />
+                <RoomComplaints complaints={roomComplaints} expanded={showRoomPanel} isLoading={isCheckingRoom} />
                 <div className="flex justify-end">
                   <GlassButton
                     label="My issue is different, continue ->"
@@ -255,13 +271,13 @@ export default function NewComplaintPage() {
                           "border-border bg-surface text-body hover:bg-transparent hover:text-body",
                           item === priority &&
                             item === "Low" &&
-                            "border-fixed bg-fixed text-surface hover:bg-transparent hover:text-fixed",
+                            "border-emerald-500 bg-emerald-500 text-surface hover:bg-transparent hover:text-emerald-500",
                           item === priority &&
                             item === "Medium" &&
                             "border-pending bg-pending text-surface hover:bg-transparent hover:text-pending",
                           item === priority &&
                             item === "High" &&
-                            "border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
+                            "border-red-500 bg-red-500 text-surface hover:bg-transparent hover:text-red-500"
                         )}
                       >
                         {item}

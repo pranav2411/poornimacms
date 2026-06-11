@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+
 export type Toast = {
   id: string;
   title?: string;
@@ -9,7 +11,12 @@ let listeners: Set<(toast: Toast[]) => void> = new Set();
 let toasts: Toast[] = [];
 
 export const useToast = () => {
-  const addToast = (
+  const removeToast = useCallback((id: string) => {
+    toasts = toasts.filter((t) => t.id !== id);
+    listeners.forEach((listener) => listener(toasts));
+  }, []);
+
+  const addToast = useCallback((
     toast: Omit<Toast, "id">
   ) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -24,12 +31,7 @@ export const useToast = () => {
     }, 3000);
 
     return id;
-  };
-
-  const removeToast = (id: string) => {
-    toasts = toasts.filter((t) => t.id !== id);
-    listeners.forEach((listener) => listener(toasts));
-  };
+  }, [removeToast]);
 
   return { addToast, removeToast };
 };
@@ -38,3 +40,4 @@ export const subscribe = (listener: (toast: Toast[]) => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
+

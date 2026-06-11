@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
@@ -13,8 +13,9 @@ import type { Complaint, VendorItem } from "@/lib/types";
 export default function AdminComplaintDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
   const [open, setOpen] = useState(false);
   const [complaint, setComplaint] = useState<Complaint | null>(null);
   const [vendors, setVendors] = useState<VendorItem[]>([]);
@@ -25,7 +26,7 @@ export default function AdminComplaintDetailPage({
     const loadData = async () => {
       try {
         const [complaintData, vendorsData] = await Promise.all([
-          getComplaint(params.id),
+          getComplaint(id),
           getVendors(),
         ]);
         if (!isMounted) return;
@@ -42,7 +43,7 @@ export default function AdminComplaintDetailPage({
     return () => {
       isMounted = false;
     };
-  }, [params.id]);
+  }, [id]);
 
   const handleAssign = async (vendor: string) => {
     if (!complaint) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
@@ -12,8 +12,9 @@ import type { Complaint } from "@/lib/types";
 export default function VendorAssignmentDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
   const router = useRouter();
   const [complaint, setComplaint] = useState<Complaint | null>(null);
 
@@ -22,7 +23,7 @@ export default function VendorAssignmentDetailPage({
 
     const loadComplaint = async () => {
       try {
-        const data = await getComplaint(params.id);
+        const data = await getComplaint(id);
         if (isMounted) setComplaint(data);
       } catch {
         if (isMounted) setComplaint(null);
@@ -33,7 +34,7 @@ export default function VendorAssignmentDetailPage({
     return () => {
       isMounted = false;
     };
-  }, [params.id]);
+  }, [id]);
 
   const handleMarkFixed = async () => {
     if (!complaint) return;

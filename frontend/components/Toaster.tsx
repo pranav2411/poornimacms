@@ -11,7 +11,9 @@ export function Toaster() {
       setToasts(newToasts);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return (

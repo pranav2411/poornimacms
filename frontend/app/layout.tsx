@@ -4,6 +4,7 @@ import "./globals.css";
 import ShaderBackground from "@/components/ShaderBackground";
 import { Toaster } from "@/components/Toaster";
 import { cn } from "@/lib/utils";
+import Providers from "@/components/Providers";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -43,10 +44,13 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-bg text-body">
         <ShaderBackground />
         <Toaster />
-        <div className="relative z-10 min-h-screen flex flex-col overflow-x-hidden">
-          {children}
-        </div>
+        <Providers>
+          <div className="relative z-10 min-h-screen flex flex-col overflow-x-hidden">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );
 }
+

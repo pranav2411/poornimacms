@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/button";
 import {
   closeComplaint,
@@ -18,6 +19,7 @@ import { useToast } from "@/lib/toast";
 export default function FacultyComplaintsPage() {
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null);
   const [reportComplaint, setReportComplaint] = useState<Complaint | null>(null);
   const [closeConfirm, setCloseConfirm] = useState<Complaint | null>(null);
@@ -40,10 +42,22 @@ export default function FacultyComplaintsPage() {
 
     const loadComplaints = async () => {
       try {
+        setIsLoading(true);
         const data = await getComplaints();
-        if (isMounted) setComplaints(data);
-      } catch {
-        if (isMounted) setComplaints([]);
+        if (isMounted) {
+          setComplaints(data);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setComplaints([]);
+          setIsLoading(false);
+          addToast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to load complaints list",
+            variant: "destructive",
+          });
+        }
       }
     };
 
@@ -208,38 +222,66 @@ export default function FacultyComplaintsPage() {
           </Button>
         </div>
         <div className="mt-4 grid gap-3">
-          {complaints.map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-surface/70 p-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div>
-                <p className="text-sm font-semibold text-heading">{item.title}</p>
-                <p className="text-xs text-muted">
-                  {item.room} - {item.category}
-                </p>
-                {item.closeReason && item.status === "Closed" && (
-                  <p className="mt-2 text-xs text-amber-500">
-                    Closed: {item.closeReason}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-1 flex-wrap items-center gap-3">
-                <div className="ml-auto flex flex-wrap items-center gap-3">
-                  <StatusPill status={item.status} />
-                  <span className="text-xs text-muted">{item.updatedAt}</span>
-                  <Button
-                    type="button"
-                    onClick={() => setOpenDetailsId(item.id)}
-                    size="sm"
-                    className="border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
-                  >
-                    View details
-                  </Button>
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={`complaint-skeleton-${index}`}
+                className="flex flex-col gap-3 rounded-2xl border border-border bg-surface/40 p-4 md:flex-row md:items-center md:justify-between animate-pulse"
+              >
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-5 w-1/3" />
+                  <Skeleton className="h-4 w-1/4" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-8 w-24 rounded-lg" />
                 </div>
               </div>
+            ))
+          ) : complaints.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-surface/70 p-6 text-center">
+              <p className="text-sm font-semibold text-heading">
+                No complaints found.
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                You haven't submitted any complaints yet.
+              </p>
             </div>
-          ))}
+          ) : (
+            complaints.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-col gap-3 rounded-2xl border border-border bg-surface/70 p-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-heading">{item.title}</p>
+                  <p className="text-xs text-muted">
+                    {item.room} - {item.category}
+                  </p>
+                  {item.closeReason && item.status === "Closed" && (
+                    <p className="mt-2 text-xs text-amber-500">
+                      Closed: {item.closeReason}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-wrap items-center gap-3">
+                  <div className="ml-auto flex flex-wrap items-center gap-3">
+                    <StatusPill status={item.status} />
+                    <span className="text-xs text-muted">{item.updatedAt}</span>
+                    <Button
+                      type="button"
+                      onClick={() => setOpenDetailsId(item.id)}
+                      size="sm"
+                      className="border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
+                    >
+                      View details
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </GlassCard>
       {selectedComplaint ? (

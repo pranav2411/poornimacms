@@ -12,7 +12,7 @@ type RequestOptions = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 const buildUrl = (path: string, query?: RequestOptions["query"]) => {
   const url = new URL(path, API_BASE_URL);
@@ -195,3 +195,81 @@ export const updateUserByFirebaseUid = (
     method: "PATCH",
     body: payload,
   });
+
+export const triggerSosAlert = (payload: {
+  triggeredBy: string;
+  emergencyType: string;
+  location?: string;
+  description?: string;
+}) =>
+  request<{ status: string }>("/sos/alert", {
+    method: "POST",
+    body: payload,
+  });
+
+export const getUserByEmail = (email: string) =>
+  request<{
+    id: string;
+    firebaseUid?: string | null;
+    name?: string | null;
+    avatarUrl?: string | null;
+    email: string;
+    role?: string | null;
+    departmentId?: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>(`/users/email/${encodeURIComponent(email)}`);
+
+export const updateUserById = (
+  userId: string,
+  payload: {
+    firebaseUid?: string | null;
+    name?: string | null;
+    avatarUrl?: string | null;
+    email?: string;
+    role?: string | null;
+    departmentId?: string | null;
+    isVerified?: boolean;
+    isActive?: boolean;
+  }
+) =>
+  request<{
+    id: string;
+    firebaseUid?: string | null;
+    name?: string | null;
+    avatarUrl?: string | null;
+    email: string;
+    role?: string | null;
+    departmentId?: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>(`/users/id/${userId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+
+export type SosAlertHistoryItem = {
+  id: string;
+  triggeredBy: string;
+  triggeredByName: string;
+  triggeredByEmail: string;
+  location?: string | null;
+  message?: string | null;
+  status: string;
+  createdAt: string;
+  closedAt?: string | null;
+};
+
+export const getSosHistory = () =>
+  request<SosAlertHistoryItem[]>("/sos/history");
+
+export const resolveSosAlert = (alertId: string) =>
+  request<{ status: string }>(`/sos/${alertId}/resolve`, {
+    method: "POST",
+  });
+
+

@@ -22,6 +22,8 @@ export type Complaint = {
   status: ComplaintStatus;
   priority: ComplaintPriority;
   assignedTo?: string;
+  createdByName?: string;
+  images?: string[];
   timeline?: ComplaintTimelineItem[];
   createdAt: string;
   updatedAt: string;

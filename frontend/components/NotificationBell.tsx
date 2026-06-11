@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getNotifications } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 import type { NotificationItem } from "@/lib/types";
 
 export default function NotificationBell() {
+  const { addToast } = useToast();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const unreadCount = notifications.length;
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  
+  const processedNotificationsRef = useRef<Set<string>>(new Set());
+
+  const unreadNotifications = notifications.filter((item) => !readIds.has(item.id));
+  const unreadCount = unreadNotifications.length;
 
   useEffect(() => {
     let isMounted = true;
@@ -17,20 +24,62 @@ export default function NotificationBell() {
     const loadNotifications = async () => {
       try {
         const data = await getNotifications(10);
-        if (isMounted) setNotifications(data);
+        if (!isMounted) return;
+
+        const isFirstLoad = processedNotificationsRef.current.size === 0;
+
+        data.forEach((item) => {
+          const isSos = item.title.startsWith("🚨 SOS");
+          const hasNotBeenProcessed = !processedNotificationsRef.current.has(item.id);
+
+          if (isSos && hasNotBeenProcessed) {
+            processedNotificationsRef.current.add(item.id);
+            if (!isFirstLoad) {
+              // Trigger a high-priority destructive screen toast
+              addToast({
+                title: item.title,
+                description: "App-wide emergency alert triggered. Look at the updates dashboard.",
+                variant: "destructive",
+              });
+            }
+          } else {
+            processedNotificationsRef.current.add(item.id);
+          }
+        });
+
+        setNotifications(data);
       } catch {
         if (isMounted) setNotifications([]);
       }
     };
 
     loadNotifications();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadNotifications();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Poll for updates every 30 seconds when active
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadNotifications();
+      }
+    }, 30000);
+
     return () => {
       isMounted = false;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [addToast]);
 
   const handleMarkAllRead = () => {
-    setNotifications([]);
+    const ids = new Set(notifications.map((n) => n.id));
+    setReadIds(ids);
   };
 
   return (
@@ -73,18 +122,18 @@ export default function NotificationBell() {
             <Button
               type="button"
               onClick={handleMarkAllRead}
-              disabled={notifications.length === 0}
+              disabled={unreadNotifications.length === 0}
               size="xs"
               className="border-accent bg-accent text-white hover:bg-transparent hover:text-accent disabled:border-border disabled:bg-border disabled:text-muted"
             >
               Mark all read
             </Button>
           </div>
-          {notifications.length === 0 ? (
+          {unreadNotifications.length === 0 ? (
             <p className="mt-3 text-sm text-muted">No updates yet.</p>
           ) : (
             <div className="mt-3 grid gap-3">
-              {notifications.map((item) => (
+              {unreadNotifications.map((item) => (
                 <div key={item.id} className="rounded-xl border border-border/60 bg-surface/70 p-3">
                   <p className="text-sm font-medium text-heading">{item.title}</p>
                   <p className="text-xs text-muted">{item.timestamp}</p>
@@ -97,3 +146,4 @@ export default function NotificationBell() {
     </div>
   );
 }
+
