@@ -27,6 +27,8 @@ class Complaint(BaseModel):
     status: ComplaintStatus
     priority: ComplaintPriority
     createdBy: str
+    createdByName: Optional[str] = None
+    images: List[str] = []
     assignedTo: Optional[str] = None
     assignedVendorId: Optional[str] = None
     cancellationReason: Optional[str] = None
@@ -83,8 +85,8 @@ class VendorItem(BaseModel):
 
 
 class UserCreate(BaseModel):
-    firebaseUid: str = Field(..., min_length=1, max_length=255)
-    name: str = Field(..., min_length=2, max_length=150)
+    firebaseUid: Optional[str] = Field(default=None, max_length=255)
+    name: Optional[str] = Field(default=None, max_length=150)
     avatarUrl: Optional[str] = Field(default=None, max_length=1000)
     email: str = Field(..., min_length=5, max_length=255)
     role: str = Field(..., min_length=3, max_length=30)
@@ -94,6 +96,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    firebaseUid: Optional[str] = Field(default=None, max_length=255)
     name: Optional[str] = Field(default=None, min_length=2, max_length=150)
     avatarUrl: Optional[str] = Field(default=None, max_length=1000)
     email: Optional[str] = Field(default=None, min_length=5, max_length=255)
@@ -105,13 +108,34 @@ class UserUpdate(BaseModel):
 
 class UserItem(BaseModel):
     id: str
-    firebaseUid: str
-    name: str
+    firebaseUid: Optional[str] = None
+    name: Optional[str] = None
     avatarUrl: Optional[str] = None
     email: str
-    role: str
+    role: Optional[str] = None
     departmentId: Optional[str] = None
     isVerified: bool
     isActive: bool
     createdAt: str
     updatedAt: str
+
+
+class SosAlertCreate(BaseModel):
+    triggeredBy: str = Field(..., min_length=1)
+    emergencyType: str = Field(..., min_length=3, max_length=50)
+    location: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1000)
+
+
+class SosAlertHistoryItem(BaseModel):
+    id: str
+    triggeredBy: str
+    triggeredByName: str
+    triggeredByEmail: str
+    location: Optional[str] = None
+    message: Optional[str] = None
+    status: str
+    createdAt: str
+    closedAt: Optional[str] = None
+
+

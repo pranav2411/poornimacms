@@ -55,6 +55,8 @@ def _serialize_complaint(
     assignment: Optional[Dict[str, Any]],
     department_name: Optional[str],
     vendor_name: Optional[str],
+    creator_name: Optional[str] = None,
+    images: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     timeline = [
         {"label": h.get("new_status") or h.get("remarks"), "time": h.get("created_at"), "remarks": h.get("remarks")} for h in history
@@ -74,6 +76,8 @@ def _serialize_complaint(
         "assignedTo": vendor_name,
         "assignedVendorId": row.get("assigned_vendor_id"),
         "createdBy": row.get("created_by"),
+        "createdByName": creator_name or "Faculty User",
+        "images": images or [],
         "cancellationReason": row.get("cancellation_reason"),
         "resolvedAt": row.get("resolved_at"),
         "cancelledAt": row.get("cancelled_at"),
@@ -115,12 +119,27 @@ def _get_complaint_row(complaint_no: str) -> Dict[str, Any]:
         v = supabase.table("users").select("name").eq("id", row.get("assigned_vendor_id")).limit(1).execute()
         vendor_name = (v.data or [{}])[0].get("name")
 
+    # creator name
+    creator_name = None
+    if row.get("created_by"):
+        c = supabase.table("users").select("name").eq("id", row.get("created_by")).limit(1).execute()
+        if c.data:
+            creator_name = c.data[0].get("name")
+
+    # images
+    images_resp = (
+        supabase.table("complaint_images").select("secure_url").eq("complaint_id", row["id"]).execute()
+    )
+    images = [img["secure_url"] for img in (images_resp.data or [])]
+
     return {
         "row": row,
         "history": history,
         "assignment": assignment,
         "department_name": department_name,
         "vendor_name": vendor_name,
+        "creator_name": creator_name,
+        "images": images,
     }
 
 
@@ -154,18 +173,105 @@ def list_complaints(status_filter: Optional[str] = Query(default=None, alias="st
             return []
 
     data = query.execute().data or []
+    if not data:
+        return []
+
+    complaint_ids = [item["id"] for item in data]
+
+    # Fetch status history for all complaints in one query
+    history_resp = (
+        supabase.table("complaint_status_history")
+        .select("complaint_id,old_status,new_status,remarks,changed_by,created_at")
+        .in_("complaint_id", complaint_ids)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    histories_by_id: Dict[str, List[Dict[str, Any]]] = {}
+    for h in (history_resp.data or []):
+        c_id = h["complaint_id"]
+        if c_id not in histories_by_id:
+            histories_by_id[c_id] = []
+        histories_by_id[c_id].append(h)
+
+    # Fetch assignments in one query
+    assignment_resp = (
+        supabase.table("complaint_assignments")
+        .select("complaint_id,vendor_id,assigned_at,assigned_by")
+        .in_("complaint_id", complaint_ids)
+        .order("assigned_at", desc=True)
+        .execute()
+    )
+    assignments_by_id: Dict[str, Dict[str, Any]] = {}
+    for a in (assignment_resp.data or []):
+        c_id = a["complaint_id"]
+        # Ordered by assigned_at desc, so the first one found is the latest
+        if c_id not in assignments_by_id:
+            assignments_by_id[c_id] = a
+
+    # Fetch departments in one query
+    dept_ids = list(set(item["department_id"] for item in data if item.get("department_id")))
+    dept_names_by_id: Dict[str, str] = {}
+    if dept_ids:
+        dept_resp = supabase.table("departments").select("id,name").in_("id", dept_ids).execute()
+        for d in (dept_resp.data or []):
+            dept_names_by_id[d["id"]] = d["name"]
+
+    # Fetch vendor names in one query
+    vendor_ids = list(set(item["assigned_vendor_id"] for item in data if item.get("assigned_vendor_id")))
+    vendor_names_by_id: Dict[str, str] = {}
+    if vendor_ids:
+        vendor_resp = supabase.table("users").select("id,name").in_("id", vendor_ids).execute()
+        for v in (vendor_resp.data or []):
+            vendor_names_by_id[v["id"]] = v["name"]
+
+    # Fetch creator names in one query
+    creator_ids = list(set(item["created_by"] for item in data if item.get("created_by")))
+    creator_names_by_id: Dict[str, str] = {}
+    if creator_ids:
+        creator_resp = supabase.table("users").select("id,name").in_("id", creator_ids).execute()
+        for c in (creator_resp.data or []):
+            creator_names_by_id[c["id"]] = c["name"]
+
+    # Fetch complaint images in one query
+    images_resp = (
+        supabase.table("complaint_images")
+        .select("complaint_id,secure_url")
+        .in_("complaint_id", complaint_ids)
+        .execute()
+    )
+    images_by_complaint: Dict[str, List[str]] = {}
+    for img in (images_resp.data or []):
+        c_id = img["complaint_id"]
+        if c_id not in images_by_complaint:
+            images_by_complaint[c_id] = []
+        images_by_complaint[c_id].append(img["secure_url"])
+
     results: List[Dict[str, Any]] = []
     for item in data:
-        # fetch history and assignment per complaint
-        info = _get_complaint_row(item["complaint_no"])
-        results.append(_serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name")))
+        c_id = item["id"]
+        history = histories_by_id.get(c_id, [])
+        assignment = assignments_by_id.get(c_id, None)
+        department_name = dept_names_by_id.get(item.get("department_id"), None)
+        vendor_name = vendor_names_by_id.get(item.get("assigned_vendor_id"), None)
+        creator_name = creator_names_by_id.get(item.get("created_by"), None)
+        images = images_by_complaint.get(c_id, [])
+
+        results.append(_serialize_complaint(item, history, assignment, department_name, vendor_name, creator_name, images))
     return results
 
 
 @router.get("/{complaint_no}", response_model=Complaint)
 def get_complaint(complaint_no: str) -> Complaint:
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("", response_model=Complaint, status_code=status.HTTP_201_CREATED)
@@ -212,7 +318,15 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("/{complaint_no}/assign", response_model=Complaint)
@@ -272,7 +386,15 @@ def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("/{complaint_no}/mark-fixed", response_model=Complaint)
@@ -298,7 +420,15 @@ def mark_fixed(complaint_no: str) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("/{complaint_no}/close", response_model=Complaint)
@@ -325,7 +455,15 @@ def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Compla
     }).execute()
 
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("/{complaint_no}/remind", response_model=Complaint)
@@ -341,7 +479,15 @@ def send_reminder(complaint_no: str) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
-    return _serialize_complaint(info["row"], info["history"], info["assignment"], info.get("department_name"), info.get("vendor_name"))
+    return _serialize_complaint(
+        info["row"],
+        info["history"],
+        info["assignment"],
+        info.get("department_name"),
+        info.get("vendor_name"),
+        info.get("creator_name"),
+        info.get("images")
+    )
 
 
 @router.post("/{complaint_no}/report", status_code=status.HTTP_201_CREATED)

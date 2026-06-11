@@ -1,1 +1,2 @@
-__all__ = ["complaints", "users", "meta", "notifications", "stats", "vendors"]
+__all__ = ["complaints", "users", "meta", "notifications", "stats", "vendors", "sos"]
+

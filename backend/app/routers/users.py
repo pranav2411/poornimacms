@@ -63,19 +63,33 @@ def create_user(payload: UserCreate) -> UserItem:
 			detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
 		)
 
-	existing = (
-		supabase.table("users")
-		.select("id")
-		.or_(f"firebase_uid.eq.{payload.firebaseUid},email.eq.{payload.email}")
-		.limit(1)
-		.execute()
-	)
+	if payload.firebaseUid:
+		existing = (
+			supabase.table("users")
+			.select("id")
+			.or_(f"firebase_uid.eq.{payload.firebaseUid},email.eq.{payload.email}")
+			.limit(1)
+			.execute()
+		)
+	else:
+		existing = (
+			supabase.table("users")
+			.select("id")
+			.eq("email", payload.email)
+			.limit(1)
+			.execute()
+		)
+
 	if existing.data:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
 
+	name = payload.name
+	if not name:
+		name = payload.email.split("@")[0]
+
 	insert_payload = {
 		"firebase_uid": payload.firebaseUid,
-		"name": payload.name,
+		"name": name,
 		"avatar_url": payload.avatarUrl,
 		"email": payload.email,
 		"role": role,
@@ -137,3 +151,86 @@ def update_user_by_firebase_uid(firebase_uid: str, payload: UserUpdate) -> UserI
 @router.get("/firebase/{firebase_uid}", response_model=UserItem)
 def get_user_by_firebase_uid(firebase_uid: str) -> UserItem:
 	return _serialize_user(_get_user_by_firebase_uid(firebase_uid))
+
+
+@router.get("/email/{email}", response_model=UserItem)
+def get_user_by_email(email: str) -> UserItem:
+	supabase = get_supabase()
+	response = (
+		supabase.table("users")
+		.select("*")
+		.eq("email", email)
+		.limit(1)
+		.execute()
+	)
+	data = response.data or []
+	if not data:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+	return _serialize_user(data[0])
+
+
+@router.patch("/id/{user_id}", response_model=UserItem)
+def update_user_by_id(user_id: str, payload: UserUpdate) -> UserItem:
+	supabase = get_supabase()
+
+	update_payload = payload.model_dump(exclude_unset=True)
+	if not update_payload:
+		return _serialize_user(_get_user_row(user_id))
+
+	mapped_payload: Dict[str, Any] = {}
+	if "firebaseUid" in update_payload:
+		mapped_payload["firebase_uid"] = update_payload["firebaseUid"]
+	if "name" in update_payload:
+		mapped_payload["name"] = update_payload["name"]
+	if "avatarUrl" in update_payload:
+		mapped_payload["avatar_url"] = update_payload["avatarUrl"]
+	if "email" in update_payload:
+		mapped_payload["email"] = update_payload["email"]
+	if "role" in update_payload:
+		role = str(update_payload["role"]).strip()
+		if role not in ALLOWED_ROLES:
+			raise HTTPException(
+				status_code=status.HTTP_400_BAD_REQUEST,
+				detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
+			)
+		mapped_payload["role"] = role
+	if "departmentId" in update_payload:
+		mapped_payload["department_id"] = update_payload["departmentId"]
+	if "isVerified" in update_payload:
+		mapped_payload["is_verified"] = update_payload["isVerified"]
+	if "isActive" in update_payload:
+		mapped_payload["is_active"] = update_payload["isActive"]
+
+	response = (
+		supabase.table("users")
+		.update(mapped_payload)
+		.eq("id", user_id)
+		.execute()
+	)
+	data = response.data or []
+	if not data:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+	return _serialize_user(data[0])
+
+
+@router.delete("/id/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_by_id(user_id: str):
+	supabase = get_supabase()
+	# 1. Delete notifications for the user
+	supabase.table("notifications").delete().eq("user_id", user_id).execute()
+	# 2. Delete SOS alerts for the user
+	supabase.table("sos_alerts").delete().eq("triggered_by", user_id).execute()
+
+	# 3. Try to delete the user
+	try:
+		resp = supabase.table("users").delete().eq("id", user_id).execute()
+		if not resp.data:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+	except Exception:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail="Cannot delete user. This user has associated complaints, departments, or other active data in the system."
+		)
+	return
+

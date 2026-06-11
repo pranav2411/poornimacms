@@ -10,7 +10,7 @@ from pydantic_settings import SettingsConfigDict
 class Settings(BaseSettings):
     environment: str = "development"
     allowed_origins: str = Field(
-        "http://localhost:3000",
+        "http://localhost:3000,http://127.0.0.1:3000",
         alias="ALLOWED_ORIGINS",
     )
 
