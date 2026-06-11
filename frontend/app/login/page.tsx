@@ -35,6 +35,7 @@ const getGoogleProfile = (user: {
 });
 
 const storeUserProfile = (profile: {
+  id: string;
   uid: string;
   email: string | null;
   name: string;
@@ -44,6 +45,7 @@ const storeUserProfile = (profile: {
   window.localStorage.setItem(
     "poornima-user",
     JSON.stringify({
+      id: profile.id,
       uid: profile.uid,
       email: profile.email,
       name: profile.name,
@@ -69,7 +71,6 @@ async function syncUserProfile(user: {
       profile = await createUser({
         firebaseUid: user.uid,
         name: googleProfile.name,
-        avatarUrl: googleProfile.avatarUrl,
         email: googleProfile.email,
         role: "faculty",
         isVerified: true,
@@ -82,18 +83,19 @@ async function syncUserProfile(user: {
 
   const needsRefresh =
     profile.name !== googleProfile.name ||
-    (profile.avatarUrl ?? "/user-no-av.png") !== googleProfile.avatarUrl ||
     profile.email !== googleProfile.email;
 
   if (needsRefresh) {
     profile = await updateUserByFirebaseUid(user.uid, {
       name: googleProfile.name,
-      avatarUrl: googleProfile.avatarUrl,
       email: googleProfile.email,
     });
   }
 
-  return profile;
+  return {
+    ...profile,
+    avatarUrl: googleProfile.avatarUrl,
+  };
 }
 
 export default function LoginPage() {
@@ -118,6 +120,7 @@ export default function LoginPage() {
         const profile = await syncUserProfile(user);
 
         storeUserProfile({
+          id: profile.id,
           uid: user.uid,
           email: user.email,
           name: profile.name,
@@ -167,6 +170,7 @@ export default function LoginPage() {
       const target = roleToDashboard[profile.role] ?? "/dashboard/faculty";
 
       storeUserProfile({
+        id: profile.id,
         uid: user.uid,
         email: user.email,
         name: profile.name,

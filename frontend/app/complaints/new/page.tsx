@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { parse } from "cookie";
+import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import GlassButton from "@/components/GlassButton";
 import RoomComplaints from "@/components/RoomComplaints";
 import StepForm from "@/components/StepForm";
+import SubmissionSuccessModal from "@/components/SubmissionSuccessModal";
 import { Button } from "@/components/ui/button";
 import { createComplaint, getCategories, getComplaints } from "@/lib/api";
 import type { Complaint } from "@/lib/types";
@@ -16,18 +17,19 @@ const steps = ["Room verification", "Complaint details", "Review & submit"];
 
 const DEFAULT_CREATED_BY = "system";
 const CATEGORY_TO_DEPARTMENT_ID: Record<string, string> = {
-  Electrical: "D1",
-  Plumbing: "D2",
-  Carpentry: "D3",
-  "IT/AV": "D4",
-  Housekeeping: "D5",
-  Other: "D6",
+  Electrical: "65d93176-b531-4b84-8d54-e6689de090f1",
+  Plumbing: "ab125a61-9df4-43cf-b47d-7360c6487ffa",
+  Carpentry: "599d6c33-8395-4722-9f0e-5f337b4df382",
+  "IT/AV": "8f29204c-cc78-4000-9ce1-e90c10115e04",
+  Housekeeping: "bc080624-a18e-4dd9-9fd2-b8a6889bae05",
+  Other: "559f62c2-a3f7-476d-b95c-a22ae215aa0b",
 };
 
 const resolveDepartmentId = (selectedCategory: string) =>
-  CATEGORY_TO_DEPARTMENT_ID[selectedCategory] || "D6";
+  CATEGORY_TO_DEPARTMENT_ID[selectedCategory] || "559f62c2-a3f7-476d-b95c-a22ae215aa0b";
 
 export default function NewComplaintPage() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [room, setRoom] = useState("");
   const [showRoomPanel, setShowRoomPanel] = useState(false);
@@ -38,6 +40,8 @@ export default function NewComplaintPage() {
   const [priority, setPriority] = useState("Medium");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [submittedComplaint, setSubmittedComplaint] = useState<Complaint | null>(null);
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
 
   const roomComplaints = useMemo(
     () => complaints.filter((item) => item.room === room && item.status !== "Closed"),
@@ -99,14 +103,41 @@ export default function NewComplaintPage() {
     };
   }, [room]);
 
+  const handleCloseSuccess = () => {
+    setIsSuccessOpen(false);
+    setSubmittedComplaint(null);
+    setCurrentStep(0);
+    setRoom("");
+    setTitle("");
+    setDescription("");
+    setCategory(categories[0] || "");
+    setPriority("Medium");
+  };
+
+  const handleViewDashboard = () => {
+    router.push("/dashboard/faculty");
+  };
+
   const handleSubmit = async () => {
     const departmentId = resolveDepartmentId(category);
-    const cookies = typeof document !== "undefined" ? parse(document.cookie || "") : {};
-    const createdBy = cookies.user_id || DEFAULT_CREATED_BY;
+    let createdBy = DEFAULT_CREATED_BY;
+    if (typeof window !== "undefined") {
+      const rawUser = window.localStorage.getItem("poornima-user");
+      if (rawUser) {
+        try {
+          const parsed = JSON.parse(rawUser) as { id?: string };
+          if (parsed.id) {
+            createdBy = parsed.id;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
     if (!room || !category || !title || !description || !departmentId || !createdBy) return;
     setIsSubmitting(true);
     try {
-      await createComplaint({
+      const res = await createComplaint({
         location: room,
         departmentId,
         title,
@@ -115,11 +146,8 @@ export default function NewComplaintPage() {
         createdBy,
       });
       setIsSubmitting(false);
-      setCurrentStep(0);
-      setRoom("");
-      setTitle("");
-      setDescription("");
-      setPriority("Medium");
+      setSubmittedComplaint(res);
+      setIsSuccessOpen(true);
     } catch {
       setIsSubmitting(false);
     }
@@ -304,6 +332,12 @@ export default function NewComplaintPage() {
           </StepForm>
         </GlassCard>
       </div>
+      <SubmissionSuccessModal
+        open={isSuccessOpen}
+        complaint={submittedComplaint}
+        onClose={handleCloseSuccess}
+        onViewDashboard={handleViewDashboard}
+      />
     </DashboardShell>
   );
 }

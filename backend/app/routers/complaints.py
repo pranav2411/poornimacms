@@ -177,6 +177,13 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
     system_user_id = _get_system_user_id(supabase)
     dept = _get_department(supabase, payload.departmentId)
 
+    import uuid
+    created_by_uuid = payload.createdBy
+    try:
+        uuid.UUID(str(created_by_uuid))
+    except ValueError:
+        created_by_uuid = system_user_id
+
     insert_payload = {
         "complaint_no": complaint_no,
         "title": payload.title,
@@ -185,7 +192,7 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
         "department_id": dept["id"],
         "priority": payload.priority,
         "status": "open",
-        "created_by": payload.createdBy or system_user_id,
+        "created_by": created_by_uuid,
         "created_at": now,
         "updated_at": now,
     }

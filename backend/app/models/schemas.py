@@ -21,10 +21,13 @@ class Complaint(BaseModel):
     title: str
     description: str
     location: str
+    room: str
+    category: Optional[str] = None
     departmentId: str
     status: ComplaintStatus
     priority: ComplaintPriority
     createdBy: str
+    assignedTo: Optional[str] = None
     assignedVendorId: Optional[str] = None
     cancellationReason: Optional[str] = None
     resolvedAt: Optional[str] = None
@@ -32,6 +35,8 @@ class Complaint(BaseModel):
     timeline: List[ComplaintTimelineItem] = []
     createdAt: str
     updatedAt: str
+    workCompleted: Optional[bool] = None
+    closeReason: Optional[str] = None
 
 
 class ComplaintCreate(BaseModel):
@@ -44,7 +49,7 @@ class ComplaintCreate(BaseModel):
 
 
 class AssignVendorRequest(BaseModel):
-    vendorId: str = Field(..., min_length=1)
+    vendor: str = Field(..., min_length=1)
     assignedBy: Optional[str] = Field(default=None, min_length=1)
 
 
