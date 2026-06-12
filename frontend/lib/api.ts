@@ -15,7 +15,9 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 const buildUrl = (path: string, query?: RequestOptions["query"]) => {
-  const url = new URL(path, API_BASE_URL);
+  const baseUrlClean = API_BASE_URL.replace(/\/$/, "");
+  const pathClean = path.replace(/^\//, "");
+  const url = new URL(`${baseUrlClean}/${pathClean}`);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
       if (value === undefined) return;
