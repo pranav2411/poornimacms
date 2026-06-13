@@ -6,11 +6,13 @@ export default function GlassButton({
   className,
   onClick,
   disabled,
+  children,
 }: {
-  label: string;
+  label?: string;
   className?: string;
   onClick?: () => void;
   disabled?: boolean;
+  children?: React.ReactNode;
 }) {
   return (
     <Button
@@ -24,7 +26,7 @@ export default function GlassButton({
         className
       )}
     >
-      {label}
+      {children || label}
     </Button>
   );
 }

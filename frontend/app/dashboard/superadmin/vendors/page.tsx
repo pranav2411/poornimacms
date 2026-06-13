@@ -1,57 +1,65 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import DashboardShell from "@/components/DashboardShell";
-import GlassCard from "@/components/GlassCard";
-import { Button } from "@/components/ui/button";
+import VendorsDirectoryClient from "./VendorsDirectoryClient";
 
-const vendors = [
-  // TODO: replace with API
-  { id: "VND-01", name: "Ravi Electricals", category: "Electrical" },
-  { id: "VND-02", name: "FlowFix Plumbing", category: "Plumbing" },
-  { id: "VND-03", name: "TechWave AV", category: "IT/AV" },
-];
+export const dynamic = "force-dynamic";
 
-export default function SuperadminVendorsPage() {
+export default async function SuperadminVendorsPage() {
+  const session = await auth();
+
+  // Validate authentication and superadmin authorization
+  if (!session || !session.user) {
+    redirect("/login");
+  }
+
+  if (session.user.role !== "superadmin") {
+    redirect("/unauthorized");
+  }
+
+  const supabase = createAdminClient();
+
+  // Query vendors from database
+  const { data: dbVendors, error } = await supabase
+    .from("users")
+    .select(`
+      id,
+      name,
+      email,
+      avatar_url,
+      departments (
+        name
+      )
+    `)
+    .eq("role", "vendor")
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching vendors list:", error);
+  }
+
+  // Format vendor data
+  const formattedVendors = (dbVendors || []).map((vendor) => {
+    const categoryName = (vendor.departments as any)?.name || "General";
+    return {
+      id: vendor.id,
+      name: vendor.name || vendor.email.split("@")[0],
+      email: vendor.email,
+      image: vendor.avatar_url || null,
+      category: categoryName,
+    };
+  });
+
   return (
     <DashboardShell
       role="superadmin"
       title="Vendor Directory"
       subtitle="Track vendor coverage"
-      userName="Chief Admin"
-      avatarUrl="/user-no-av.png"
+      userName={session.user.name || "Chief Admin"}
+      avatarUrl={session.user.image || "/user-no-av.png"}
     >
-      <GlassCard className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-heading">Vendors</h2>
-            <p className="text-sm text-muted">Approved service partners.</p>
-          </div>
-          <Button
-            type="button"
-            className="border-primary bg-primary text-surface hover:bg-transparent hover:text-primary"
-          >
-            Add vendor
-          </Button>
-        </div>
-        <div className="mt-4 grid gap-3">
-          {vendors.map((vendor) => (
-            <div
-              key={vendor.id}
-              className="flex items-center justify-between rounded-2xl border border-border bg-surface/70 p-4"
-            >
-              <div>
-                <p className="text-sm font-semibold text-heading">{vendor.name}</p>
-                <p className="text-xs text-muted">{vendor.category}</p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500"
-              >
-                Remove
-              </Button>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
+      <VendorsDirectoryClient initialVendors={formattedVendors} />
     </DashboardShell>
   );
 }

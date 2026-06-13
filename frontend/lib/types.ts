@@ -22,6 +22,7 @@ export type Complaint = {
   status: ComplaintStatus;
   priority: ComplaintPriority;
   assignedTo?: string;
+  createdBy: string;
   createdByName?: string;
   images?: string[];
   timeline?: ComplaintTimelineItem[];
@@ -31,6 +32,8 @@ export type Complaint = {
   otpVerified?: boolean;
   lastReminderSent?: string;
   closeReason?: string;
+  resolvedAt?: string | null;
+  cancelledAt?: string | null;
 };
 
 export type StatItem = {

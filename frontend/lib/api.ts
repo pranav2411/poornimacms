@@ -6,7 +6,7 @@ import type {
 } from "@/lib/types";
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
 };
@@ -58,11 +58,15 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
 export const getComplaints = (options?: {
   status?: string;
   assignedTo?: string;
+  createdBy?: string;
+  location?: string;
 }) =>
   request<Complaint[]>("/complaints", {
     query: {
       status: options?.status,
       assignedTo: options?.assignedTo,
+      createdBy: options?.createdBy,
+      location: options?.location,
     },
   });
 
@@ -124,8 +128,12 @@ export const getNotifications = (limit = 10) =>
     query: { limit },
   });
 
-export const getStats = async () => {
-  const response = await request<{ stats: StatItem[] }>("/stats");
+export const getStats = async (options?: { createdBy?: string }) => {
+  const response = await request<{ stats: StatItem[] }>("/stats", {
+    query: {
+      createdBy: options?.createdBy,
+    },
+  });
   return response.stats;
 };
 
@@ -273,5 +281,8 @@ export const resolveSosAlert = (alertId: string) =>
   request<{ status: string }>(`/sos/${alertId}/resolve`, {
     method: "POST",
   });
+
+export const deleteComplaint = (complaintId: string) =>
+  request<void>(`/complaints/${complaintId}`, { method: "DELETE" });
 
 

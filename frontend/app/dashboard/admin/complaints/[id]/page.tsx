@@ -9,6 +9,7 @@ import AssignVendorModal from "@/components/AssignVendorModal";
 import { Button } from "@/components/ui/button";
 import { assignVendor, getComplaint, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminComplaintDetailPage({
   params,
@@ -90,7 +91,7 @@ export default function AdminComplaintDetailPage({
         </GlassCard>
         <GlassCard className="p-6">
           <h3 className="text-sm font-semibold text-heading">Status timeline</h3>
-          <p className="text-xs text-muted">Updated at {complaint?.updatedAt ?? "-"}</p>
+          <p className="text-xs text-muted">Updated at {complaint?.updatedAt ? formatDateTime(complaint.updatedAt) : "-"}</p>
           <div className="mt-4">
             <ComplaintTimeline activeStep={2} />
           </div>

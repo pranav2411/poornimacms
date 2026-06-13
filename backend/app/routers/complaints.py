@@ -155,7 +155,12 @@ def _generate_complaint_no() -> str:
 
 
 @router.get("", response_model=List[Complaint])
-def list_complaints(status_filter: Optional[str] = Query(default=None, alias="status"), assigned_to: Optional[str] = Query(default=None, alias="assignedTo")) -> List[Complaint]:
+def list_complaints(
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    assigned_to: Optional[str] = Query(default=None, alias="assignedTo"),
+    created_by: Optional[str] = Query(default=None, alias="createdBy"),
+    location: Optional[str] = Query(default=None, alias="location"),
+) -> List[Complaint]:
     supabase = get_supabase()
     query = supabase.table("complaints").select("*").order("updated_at", desc=True)
     if status_filter:
@@ -171,6 +176,10 @@ def list_complaints(status_filter: Optional[str] = Query(default=None, alias="st
         else:
             # no vendor found -> return empty
             return []
+    if created_by:
+        query = query.eq("created_by", created_by)
+    if location:
+        query = query.eq("location", location)
 
     data = query.execute().data or []
     if not data:
@@ -503,3 +512,18 @@ def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, st
     }).execute()
 
     return {"status": "reported"}
+
+
+@router.delete("/{complaint_no}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_complaint(complaint_no: str):
+    supabase = get_supabase()
+    resp = supabase.table("complaints").select("id").eq("complaint_no", complaint_no).limit(1).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    
+    delete_resp = supabase.table("complaints").delete().eq("complaint_no", complaint_no).execute()
+    if not delete_resp.data:
+        raise HTTPException(status_code=500, detail="Failed to delete complaint")
+    
+    return
+

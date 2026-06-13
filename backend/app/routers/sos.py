@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, List
 from datetime import datetime, timezone
 
@@ -38,7 +39,8 @@ def trigger_sos_alert(payload: SosAlertCreate):
     if payload.description:
          notif_title += f" - {payload.description}"
 
-    notif_message = f"Emergency triggered by {user_name}. Location: {payload.location or 'Unknown'}. Details: {payload.description or 'No details'}"
+    alert_id = sos_resp.data[0]["id"]
+    notif_message = f"Emergency triggered by {user_name}. Location: {payload.location or 'Unknown'}. Details: {payload.description or 'No details'} [SOS_ID:{alert_id}]"
 
     notif_resp = supabase.table("notifications").insert({
         "user_id": payload.triggeredBy,
@@ -91,6 +93,17 @@ def get_sos_history() -> List[SosAlertHistoryItem]:
 @router.post("/{alert_id}/resolve")
 def resolve_sos_alert(alert_id: str):
     supabase = get_supabase()
+    
+    # 1. Fetch the alert details first to match and delete notifications (both metadata tagged and older title-based ones)
+    alert_resp = supabase.table("sos_alerts").select("*").eq("id", alert_id).limit(1).execute()
+    if not alert_resp.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found or failed to resolve"
+        )
+    alert_data = alert_resp.data[0]
+
+    # 2. Update status of the SOS alert to resolved
     now = datetime.now(timezone.utc).isoformat()
     resp = (
         supabase.table("sos_alerts")
@@ -103,5 +116,35 @@ def resolve_sos_alert(alert_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Alert not found or failed to resolve"
         )
+        
+    # 3. Delete matching notifications from database
+    # Deleting via modern tag in message [SOS_ID:alert_id]
+    supabase.table("notifications").delete().like("message", f"%[SOS_ID:{alert_id}]%").execute()
+    
+    # Deleting via fallback (title matching) for backwards compatibility
+    msg = alert_data.get("message") or ""
+    emergency_type = "SOS"
+    description = ""
+    match = re.match(r"^\[(.*?)\]\s*(.*)$", msg)
+    if match:
+        emergency_type = match.group(1).upper()
+        description = match.group(2)
+    else:
+        emergency_type = "EMERGENCY"
+        description = msg
+
+    loc = alert_data.get("location") or "Unknown"
+    locs = [loc]
+    if loc == "Unknown Location":
+        locs.append("Unknown")
+    elif loc == "Unknown":
+        locs.append("Unknown Location")
+        
+    for l in locs:
+        notif_title = f"🚨 SOS: {emergency_type} alert at {l}"
+        if description:
+            notif_title += f" - {description}"
+        supabase.table("notifications").delete().eq("title", notif_title).execute()
+
     return {"status": "success"}
 

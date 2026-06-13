@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
@@ -15,8 +16,10 @@ import {
 } from "@/lib/api";
 import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
+import { formatDateTime } from "@/lib/utils";
 
 export default function FacultyComplaintsPage() {
+  const { data: session } = useSession();
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,12 +41,13 @@ export default function FacultyComplaintsPage() {
     : null;
 
   useEffect(() => {
+    if (!session?.user?.id) return;
     let isMounted = true;
 
     const loadComplaints = async () => {
       try {
         setIsLoading(true);
-        const data = await getComplaints();
+        const data = await getComplaints({ createdBy: session.user.id });
         if (isMounted) {
           setComplaints(data);
           setIsLoading(false);
@@ -65,7 +69,7 @@ export default function FacultyComplaintsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [session?.user?.id]);
 
   // Update countdown timer
   useEffect(() => {
@@ -214,12 +218,6 @@ export default function FacultyComplaintsPage() {
               Review status and assignment progress.
             </p>
           </div>
-          <Button
-            type="button"
-            className="border-primary bg-primary text-surface hover:bg-transparent hover:text-primary"
-          >
-            Export
-          </Button>
         </div>
         <div className="mt-4 grid gap-3">
           {isLoading ? (
@@ -268,7 +266,7 @@ export default function FacultyComplaintsPage() {
                 <div className="flex flex-1 flex-wrap items-center gap-3">
                   <div className="ml-auto flex flex-wrap items-center gap-3">
                     <StatusPill status={item.status} />
-                    <span className="text-xs text-muted">{item.updatedAt}</span>
+                    <span className="text-xs text-muted">{formatDateTime(item.updatedAt)}</span>
                     <Button
                       type="button"
                       onClick={() => setOpenDetailsId(item.id)}
@@ -346,7 +344,7 @@ export default function FacultyComplaintsPage() {
                             ) : null}
                           </div>
                           <span className="text-[0.65rem] text-muted">
-                            {step.time}
+                            {formatDateTime(step.time)}
                           </span>
                         </div>
                       </div>
@@ -366,7 +364,7 @@ export default function FacultyComplaintsPage() {
                 </div>
               )}
 
-              <div className="mt-5 flex items-center justify-end gap-3">
+              <div className="mt-5 flex items-center justify-between gap-3">
                 <Button
                   type="button"
                   onClick={() => setOpenDetailsId(null)}
@@ -376,125 +374,128 @@ export default function FacultyComplaintsPage() {
                   Back
                 </Button>
 
-                {/* Close button - for Pending status with no vendor assigned */}
-                {selectedComplaint.status === "Pending" &&
-                  !selectedComplaint.assignedTo && (
-                    <Button
-                      type="button"
-                      onClick={() => setCloseConfirm(selectedComplaint)}
-                      size="sm"
-                      className="inline-flex items-center gap-2 border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
+                <div className="flex items-center gap-3">
+                  {/* Close button - for Pending/Open status with no vendor assigned */}
+                  {(selectedComplaint.status.toLowerCase() === "pending" ||
+                    selectedComplaint.status.toLowerCase() === "open") &&
+                    !selectedComplaint.assignedTo && (
+                      <Button
+                        type="button"
+                        onClick={() => setCloseConfirm(selectedComplaint)}
+                        size="sm"
+                        className="inline-flex items-center gap-2 border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500"
                       >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      Close issue
-                    </Button>
-                  )}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Close issue
+                      </Button>
+                    )}
 
-                {/* Remind vendor button - for Assigned/In Progress with vendor assigned */}
-                {(selectedComplaint.status === "Assigned" ||
-                  selectedComplaint.status === "In Progress") &&
-                  selectedComplaint.assignedTo && (
-                    <Button
-                      type="button"
-                      onClick={() => setRemindVendor(selectedComplaint)}
-                      size="sm"
-                      disabled={!canSendReminder(selectedComplaint.id)}
-                      className="inline-flex items-center gap-2 border-blue-500 bg-blue-500 text-surface disabled:opacity-50 disabled:cursor-not-allowed hover:bg-transparent hover:text-blue-500 disabled:hover:bg-blue-500 disabled:hover:text-surface"
-                      title={
-                        !canSendReminder(selectedComplaint.id)
-                          ? "Can remind after 24 hours from last reminder"
-                          : "Send reminder to vendor"
-                      }
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
+                  {/* Remind vendor button - for Assigned/In Progress with vendor assigned */}
+                  {(selectedComplaint.status.toLowerCase() === "assigned" ||
+                    selectedComplaint.status.toLowerCase() === "in progress") &&
+                    selectedComplaint.assignedTo && (
+                      <Button
+                        type="button"
+                        onClick={() => setRemindVendor(selectedComplaint)}
+                        size="sm"
+                        disabled={!canSendReminder(selectedComplaint.id)}
+                        className="inline-flex items-center gap-2 border-blue-500 bg-blue-500 text-surface disabled:opacity-50 disabled:cursor-not-allowed hover:bg-transparent hover:text-blue-500 disabled:hover:bg-blue-500 disabled:hover:text-surface"
+                        title={
+                          !canSendReminder(selectedComplaint.id)
+                            ? "Can remind after 24 hours from last reminder"
+                            : "Send reminder to vendor"
+                        }
                       >
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                      </svg>
-                      {canSendReminder(selectedComplaint.id)
-                        ? "Remind vendor"
-                        : `Remind vendor in ${timeRemaining[selectedComplaint.id] || "..."}`}
-                    </Button>
-                  )}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                        {canSendReminder(selectedComplaint.id)
+                          ? "Remind vendor"
+                          : `Remind vendor in ${timeRemaining[selectedComplaint.id] || "..."}`}
+                      </Button>
+                    )}
 
-                {/* Verify button - for Fixed status with work completed but not verified */}
-                {selectedComplaint.status === "Fixed" &&
-                  selectedComplaint.workCompleted &&
-                  !selectedComplaint.otpVerified && (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        handleOpenVerifyModal(selectedComplaint)
-                      }
-                      size="sm"
-                      className="inline-flex items-center gap-2 border-purple-500 bg-purple-500 text-surface hover:bg-transparent hover:text-purple-500"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
+                  {/* Verify button - for Fixed status with work completed but not verified */}
+                  {selectedComplaint.status === "Fixed" &&
+                    selectedComplaint.workCompleted &&
+                    !selectedComplaint.otpVerified && (
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          handleOpenVerifyModal(selectedComplaint)
+                        }
+                        size="sm"
+                        className="inline-flex items-center gap-2 border-purple-500 bg-purple-500 text-surface hover:bg-transparent hover:text-purple-500"
                       >
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                        <path d="M10 17l-5-5" />
-                        <path d="M14 12l-4 5" />
-                      </svg>
-                      Verify work
-                    </Button>
-                  )}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                          <path d="M10 17l-5-5" />
+                          <path d="M14 12l-4 5" />
+                        </svg>
+                        Verify work
+                      </Button>
+                    )}
 
-                {/* Report button - for Fixed/Closed status with OTP verified */}
-                {(selectedComplaint.status === "Fixed" ||
-                  selectedComplaint.status === "Closed") &&
-                  selectedComplaint.otpVerified && (
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        setOpenDetailsId(null);
-                        setReportComplaint(selectedComplaint);
-                      }}
-                      size="sm"
-                      className="inline-flex items-center gap-2 border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
+                  {/* Report button - for Fixed/Closed status with OTP verified */}
+                  {(selectedComplaint.status === "Fixed" ||
+                    selectedComplaint.status === "Closed") &&
+                    selectedComplaint.otpVerified && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setOpenDetailsId(null);
+                          setReportComplaint(selectedComplaint);
+                        }}
+                        size="sm"
+                        className="inline-flex items-center gap-2 border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500"
                       >
-                        <path d="M12 3l9 16H3l9-16z" />
-                        <path d="M12 9v4" />
-                        <path d="M12 17h.01" />
-                      </svg>
-                      Report issue
-                    </Button>
-                  )}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 3l9 16H3l9-16z" />
+                          <path d="M12 9v4" />
+                          <path d="M12 17h.01" />
+                        </svg>
+                        Report issue
+                      </Button>
+                    )}
+                </div>
               </div>
             </GlassCard>
           </div>

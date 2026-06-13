@@ -6,6 +6,7 @@ import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm-context";
+import { formatDateTime } from "@/lib/utils";
 
 type User = {
   id: string;
@@ -418,9 +419,7 @@ export default function UsersManagementClient({
                         {user.email}
                       </td>
                       <td className="py-4 pr-4 text-xs text-muted">
-                        {new Date(user.created_at).toLocaleDateString(undefined, {
-                          dateStyle: "medium",
-                        })}
+                        {formatDateTime(user.created_at)}
                       </td>
                       <td className="py-4 text-right">
                         <div className="flex justify-end gap-2">

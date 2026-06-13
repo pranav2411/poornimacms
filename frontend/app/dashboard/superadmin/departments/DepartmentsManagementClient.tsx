@@ -30,13 +30,29 @@ export default function DepartmentsManagementClient({
   availableAdmins: Admin[];
 }) {
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
+  const [availableAdminsState, setAvailableAdminsState] = useState<Admin[]>(availableAdmins);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
+  // Search states for user lookup
+  const [searchEmail, setSearchEmail] = useState("");
+  const [searchedUser, setSearchedUser] = useState<any | null>(null);
+  const [searchError, setSearchError] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const { addToast } = useToast();
+
+  // Reset search state when active dropdown changes
+  useEffect(() => {
+    setSearchEmail("");
+    setSearchedUser(null);
+    setSearchError("");
+    setSearching(false);
+  }, [activeDropdownId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -48,6 +64,115 @@ export default function DepartmentsManagementClient({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleSearchUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchEmail.trim()) return;
+
+    setSearching(true);
+    setSearchError("");
+    setSearchedUser(null);
+
+    try {
+      const res = await fetch(`/api/users/by-email?email=${encodeURIComponent(searchEmail.trim())}`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error("User not found in system.");
+        }
+        const data = await res.json();
+        throw new Error(data.error || "Failed to search user");
+      }
+
+      const user = await res.json();
+      setSearchedUser({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image || null,
+        role: user.role,
+      });
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Search failed.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleMakeAdminAndAssign = async (departmentId: string, user: any) => {
+    setPromoting(true);
+    try {
+      // 1. Promote to Admin in database if they aren't already
+      if (user.role !== "admin") {
+        const roleRes = await fetch(`/api/users/${user.id}/role`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: "admin" }),
+        });
+
+        if (!roleRes.ok) {
+          const data = await roleRes.json();
+          throw new Error(data.error || "Failed to update user role to admin");
+        }
+      }
+
+      // 2. Add to available admins state if not already present
+      const formattedUser: Admin = {
+        id: user.id,
+        name: user.name || user.email.split("@")[0],
+        email: user.email,
+        image: user.image || null,
+      };
+
+      setAvailableAdminsState((prev) => {
+        if (prev.some((a) => a.id === user.id)) return prev;
+        return [...prev, formattedUser].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      });
+
+      // 3. Assign to this department
+      const dept = departments.find((d) => d.id === departmentId);
+      if (dept) {
+        const currentAssignedIds = dept.admins.map((a) => a.id);
+        if (!currentAssignedIds.includes(user.id)) {
+          const newAdminIds = [...currentAssignedIds, user.id];
+          
+          const res = await fetch(`/api/departments/${departmentId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adminIds: newAdminIds }),
+          });
+
+          if (!res.ok) {
+            throw new Error("Failed to assign admin to department");
+          }
+
+          // Update local departments state
+          setDepartments((prev) =>
+            prev.map((d) =>
+              d.id === departmentId ? { ...d, admins: [...d.admins, formattedUser] } : d
+            )
+          );
+        }
+      }
+
+      addToast({
+        title: "Admin assigned",
+        description: `${user.name || user.email} has been assigned to the department.`,
+        variant: "default",
+      });
+
+      // Reset search
+      setSearchedUser(null);
+      setSearchEmail("");
+    } catch (err) {
+      addToast({
+        title: "Action failed",
+        description: err instanceof Error ? err.message : "Failed to promote and assign user.",
+        variant: "destructive",
+      });
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +217,7 @@ export default function DepartmentsManagementClient({
   const handleAdminSync = async (departmentId: string, updatedAdminIds: string[]) => {
     // Optimistically update local state
     const previousDepts = [...departments];
-    const updatedAdminsList = availableAdmins.filter((a) =>
+    const updatedAdminsList = availableAdminsState.filter((a) =>
       updatedAdminIds.includes(a.id)
     );
 
@@ -253,18 +378,83 @@ export default function DepartmentsManagementClient({
                         </Button>
 
                         {isDropdownOpen && (
-                          <div className="absolute right-0 mt-2 z-30 w-64 rounded-2xl border border-border bg-surface p-3 shadow-xl max-h-60 overflow-y-auto">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-2 px-1">
-                              Assign Admins
+                          <div className="absolute right-0 mt-2 z-30 w-72 rounded-2xl border border-border bg-surface p-4 shadow-xl max-h-[360px] overflow-y-auto">
+                            {/* Search Form */}
+                            <form onSubmit={handleSearchUser} className="mb-3 border-b border-border pb-3">
+                              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted mb-1.5 px-0.5">
+                                Search user by email
+                              </label>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="email"
+                                  placeholder="e.g. name@poornima.org"
+                                  required
+                                  value={searchEmail}
+                                  onChange={(e) => setSearchEmail(e.target.value)}
+                                  className="flex-1 rounded-xl border border-border bg-surface px-2.5 py-1.5 text-xs text-heading outline-none focus:border-primary transition-all duration-200"
+                                />
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  disabled={searching || !searchEmail}
+                                  className="rounded-xl bg-primary hover:bg-primary/90 text-white px-3 py-1.5 text-xs"
+                                >
+                                  {searching ? "..." : "Go"}
+                                </Button>
+                              </div>
+
+                              {searchError && (
+                                <p className="text-[10px] text-rose-500 mt-1.5 px-0.5">{searchError}</p>
+                              )}
+
+                              {searchedUser && (
+                                <div className="mt-2.5 rounded-xl border border-border bg-surface/50 p-2.5 flex flex-col gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="relative h-7 w-7 overflow-hidden rounded-full border border-border bg-muted">
+                                      <Image
+                                        src={searchedUser.image || "/user-no-av.png"}
+                                        alt={searchedUser.name || "User"}
+                                        fill
+                                        sizes="28px"
+                                        className="object-cover"
+                                      />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-heading truncate text-xs">
+                                        {searchedUser.name || "User"}
+                                      </p>
+                                      <p className="text-[9px] font-medium text-muted uppercase">
+                                        Role: {searchedUser.role || "None"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={promoting}
+                                    onClick={() => handleMakeAdminAndAssign(dept.id, searchedUser)}
+                                    className="w-full rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] py-1 h-7.5"
+                                  >
+                                    {promoting
+                                      ? "Processing..."
+                                      : searchedUser.role === "admin"
+                                      ? "Assign to Department"
+                                      : "Make Admin & Assign"}
+                                  </Button>
+                                </div>
+                              )}
+                            </form>
+
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-2 px-0.5">
+                              Assigned Admins
                             </p>
-                            {availableAdmins.length === 0 ? (
+                            {availableAdminsState.length === 0 ? (
                               <p className="text-xs text-muted p-2 text-center">
-                                No admin users available. Create admins in User
-                                Management first.
+                                No admin users available. Use the search above to add one.
                               </p>
                             ) : (
                               <div className="flex flex-col gap-1.5">
-                                {availableAdmins.map((admin) => {
+                                {availableAdminsState.map((admin) => {
                                   const isAssigned = dept.admins.some(
                                     (a) => a.id === admin.id
                                   );

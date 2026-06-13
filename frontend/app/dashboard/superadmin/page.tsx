@@ -21,6 +21,37 @@ export default async function SuperadminDashboardPage() {
     .order("name", { ascending: true });
   const departmentNames = (depts || []).map((d) => d.name);
 
+  // Fetch real counts for vendors and admins
+  const { count: vendorsCount } = await supabase
+    .from("users")
+    .select("*", { count: "exact", head: true })
+    .eq("role", "vendor");
+
+  const { count: adminsCount } = await supabase
+    .from("users")
+    .select("*", { count: "exact", head: true })
+    .eq("role", "admin");
+
+  // Calculate dynamic average resolution time
+  const resolvedComplaints = complaints.filter(
+    (c) =>
+      (["fixed", "done", "closed", "resolved"].includes(String(c.status).toLowerCase()) || c.resolvedAt) &&
+      c.createdAt &&
+      c.resolvedAt
+  );
+
+  let avgResolutionDays = "N/A";
+  if (resolvedComplaints.length > 0) {
+    const totalMs = resolvedComplaints.reduce((acc, c) => {
+      const created = new Date(c.createdAt).getTime();
+      const resolved = new Date(c.resolvedAt!).getTime();
+      return acc + (resolved - created);
+    }, 0);
+    const avgMs = totalMs / resolvedComplaints.length;
+    const avgDays = avgMs / (1000 * 60 * 60 * 24);
+    avgResolutionDays = `${avgDays.toFixed(1)} days`;
+  }
+
   return (
     <DashboardShell
       role="superadmin"
@@ -32,8 +63,8 @@ export default async function SuperadminDashboardPage() {
       <div className="grid gap-8">
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard label="Open complaints" value={openCount} />
-          <StatCard label="Total vendors" value={12} />
-          <StatCard label="Active admins" value={6} />
+          <StatCard label="Total vendors" value={vendorsCount ?? 0} />
+          <StatCard label="Active admins" value={adminsCount ?? 0} />
         </div>
 
         <GlassCard className="p-6">
@@ -48,7 +79,7 @@ export default async function SuperadminDashboardPage() {
             </div>
             <div className="flex items-center justify-between rounded-2xl border border-border bg-surface/70 p-4">
               <span>Average resolution time</span>
-              <span className="text-heading">1.8 days</span>
+              <span className="text-heading">{avgResolutionDays}</span>
             </div>
           </div>
         </GlassCard>
@@ -60,11 +91,12 @@ export default async function SuperadminDashboardPage() {
           </p>
 
           <UnassignedComplaintsClient
-            initialComplaints={unassigned}
-            existingDepartments={departmentNames}
+             initialComplaints={unassigned}
+             existingDepartments={departmentNames}
           />
         </GlassCard>
       </div>
     </DashboardShell>
   );
 }
+

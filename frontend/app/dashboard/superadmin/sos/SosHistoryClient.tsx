@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/toast";
 import { resolveSosAlert } from "@/lib/api";
 import type { SosAlertHistoryItem } from "@/lib/api";
+import { formatDateTime } from "@/lib/utils";
 
 export default function SosHistoryClient({
   initialAlerts,
@@ -172,10 +173,7 @@ export default function SosHistoryClient({
                       </span>
 
                       <span className="text-xs text-muted font-mono">
-                        {new Date(alert.createdAt).toLocaleString(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
+                        {formatDateTime(alert.createdAt)}
                       </span>
 
                       {isActive ? (
@@ -212,7 +210,7 @@ export default function SosHistoryClient({
 
                     {!isActive && alert.closedAt && (
                       <p className="text-2xs text-muted mt-3 italic">
-                        Resolved at {new Date(alert.closedAt).toLocaleString()}
+                        Resolved at {formatDateTime(alert.closedAt)}
                       </p>
                     )}
                   </div>

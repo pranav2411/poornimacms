@@ -54,6 +54,48 @@ export default function DashboardShell({
     }
   }, []);
 
+  useEffect(() => {
+    if (session?.user) {
+      const stored = window.localStorage.getItem("poornima-user");
+      let needsWrite = false;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (
+            parsed.id !== session.user.id ||
+            parsed.name !== session.user.name ||
+            parsed.email !== session.user.email ||
+            parsed.role !== session.user.role ||
+            parsed.avatarUrl !== session.user.image
+          ) {
+            needsWrite = true;
+          }
+        } catch {
+          needsWrite = true;
+        }
+      } else {
+        needsWrite = true;
+      }
+
+      if (needsWrite) {
+        window.localStorage.setItem(
+          "poornima-user",
+          JSON.stringify({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.name,
+            role: session.user.role,
+            avatarUrl: session.user.image || "/user-no-av.png",
+          })
+        );
+        setStoredUser({
+          name: session.user.name || undefined,
+          avatarUrl: session.user.image || undefined,
+        });
+      }
+    }
+  }, [session]);
+
   const resolvedUserName = session?.user?.name || storedUser?.name?.trim() || userName;
   const resolvedAvatarUrl = session?.user?.image || storedUser?.avatarUrl?.trim() || avatarUrl || "/user-no-av.png";
 

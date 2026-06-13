@@ -3,9 +3,11 @@ import OpenComplaintsCarousel from "@/components/OpenComplaintsCarousel";
 import StatsCharts from "@/components/StatsCharts";
 import SosFloatingButton from "@/components/SosFloatingButton";
 import { getStats } from "@/lib/api";
+import { auth } from "@/auth";
 
 export default async function FacultyDashboardPage() {
-  const facultyStats = await getStats();
+  const session = await auth();
+  const facultyStats = await getStats({ createdBy: session?.user?.id });
   const hasAnalyticsData = facultyStats.some((item) => item.value > 0);
   return (
     <DashboardShell

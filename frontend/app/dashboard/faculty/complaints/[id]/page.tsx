@@ -3,6 +3,9 @@ import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import ComplaintTimeline from "@/components/ComplaintTimeline";
 import { getComplaint } from "@/lib/api";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { formatDateTime } from "@/lib/utils";
 
 export default async function FacultyComplaintDetailPage({
   params,
@@ -10,7 +13,12 @@ export default async function FacultyComplaintDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const session = await auth();
   const complaint = await getComplaint(id);
+
+  if (complaint.createdBy !== session?.user?.id) {
+    redirect("/dashboard/faculty");
+  }
 
   return (
     <DashboardShell
@@ -57,7 +65,7 @@ export default async function FacultyComplaintDetailPage({
         </GlassCard>
         <GlassCard className="p-6">
           <h3 className="text-sm font-semibold text-heading">Status timeline</h3>
-          <p className="text-xs text-muted">Updated at {complaint.updatedAt}</p>
+          <p className="text-xs text-muted">Updated at {formatDateTime(complaint.updatedAt)}</p>
           <div className="mt-4">
             <ComplaintTimeline activeStep={2} />
           </div>

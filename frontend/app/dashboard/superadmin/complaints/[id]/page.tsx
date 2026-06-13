@@ -1,15 +1,19 @@
 "use client";
 
 import { Suspense, useEffect, useState, use } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import ComplaintTimeline from "@/components/ComplaintTimeline";
 import AssignVendorModal from "@/components/AssignVendorModal";
+import CloseComplaintModal from "@/components/CloseComplaintModal";
 import { Button } from "@/components/ui/button";
-import { assignVendor, getComplaint, getVendors } from "@/lib/api";
+import { assignVendor, getComplaint, getVendors, closeComplaint, deleteComplaint } from "@/lib/api";
+import { useConfirm } from "@/lib/confirm-context";
+import { useToast } from "@/lib/toast";
 import type { Complaint, VendorItem } from "@/lib/types";
+import { formatDateTime } from "@/lib/utils";
 
 function SuperadminComplaintDetailContent({
   params,
@@ -18,12 +22,18 @@ function SuperadminComplaintDetailContent({
 }) {
   const { id } = use(params);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const confirm = useConfirm();
+  const { addToast } = useToast();
   const shouldAutoAssign = searchParams.get("assign") === "true";
 
   const [open, setOpen] = useState(false);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [complaint, setComplaint] = useState<Complaint | null>(null);
   const [vendors, setVendors] = useState<VendorItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,6 +75,50 @@ function SuperadminComplaintDetailContent({
     }
   };
 
+  const handleCloseWithReason = async (reason: string) => {
+    if (!complaint) return;
+    setClosing(true);
+    try {
+      const updated = await closeComplaint(complaint.id, reason);
+      setComplaint(updated);
+      setCloseModalOpen(false);
+    } catch (err) {
+      console.error("Error closing complaint:", err);
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!complaint) return;
+    const confirmed = await confirm({
+      title: "Delete Complaint",
+      description: "Are you sure you want to delete this complaint permanently? This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteComplaint(complaint.id);
+      addToast({
+        title: "Complaint Deleted",
+        description: `Complaint ${complaint.id} has been permanently deleted.`,
+        variant: "default",
+      });
+      router.push("/dashboard/superadmin/complaints");
+    } catch (err) {
+      console.error("Error deleting complaint:", err);
+      addToast({
+        title: "Failed to Delete",
+        description: err instanceof Error ? err.message : "An error occurred.",
+        variant: "destructive",
+      });
+      setDeleting(false);
+    }
+  };
+
   const getActiveStep = (status?: string) => {
     switch (status?.toLowerCase()) {
       case "open":
@@ -102,6 +156,8 @@ function SuperadminComplaintDetailContent({
       </div>
     );
   }
+
+  const isClosed = getActiveStep(complaint.status) >= 4;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -164,23 +220,42 @@ function SuperadminComplaintDetailContent({
           </div>
         )}
 
-        {complaint.status !== "Closed" && (
-          <div className="mt-6 flex justify-end">
-            <Button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200"
-            >
-              Assign Vendor
-            </Button>
-          </div>
-        )}
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <Button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="rounded-full border border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500 text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
+          >
+            {deleting ? "Deleting..." : "Delete Complaint"}
+          </Button>
+
+          {!isClosed && (
+            <>
+              <Button
+                type="button"
+                onClick={() => setCloseModalOpen(true)}
+                disabled={closing}
+                className="rounded-full border border-amber-500 bg-amber-500 text-white hover:bg-transparent hover:text-amber-500 text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
+              >
+                Close Complaint
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
+              >
+                Assign Vendor
+              </Button>
+            </>
+          )}
+        </div>
       </GlassCard>
 
       <GlassCard className="p-6">
         <h3 className="text-sm font-semibold text-heading">Status timeline</h3>
         <p className="text-xs text-muted">
-          Updated at {new Date(complaint.updatedAt).toLocaleString()}
+          Updated at {formatDateTime(complaint.updatedAt)}
         </p>
         <div className="mt-4">
           <ComplaintTimeline activeStep={getActiveStep(complaint.status)} />
@@ -192,6 +267,12 @@ function SuperadminComplaintDetailContent({
         onClose={() => setOpen(false)}
         vendors={vendors.map((item) => item.name)}
         onAssign={handleAssign}
+      />
+
+      <CloseComplaintModal
+        open={closeModalOpen}
+        onClose={() => setCloseModalOpen(false)}
+        onCloseSubmit={handleCloseWithReason}
       />
     </div>
   );

@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { motion, useReducedMotion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   closeComplaint,
@@ -27,6 +28,7 @@ const priorityStyles: Record<string, string> = {
 };
 
 export default function OpenComplaintsCarousel() {
+  const { data: session } = useSession();
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,12 +125,20 @@ export default function OpenComplaintsCarousel() {
     update();
     media.addEventListener("change", update);
 
+    return () => {
+      media.removeEventListener("change", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
     let isMounted = true;
 
     const loadComplaints = async () => {
       try {
         setIsLoading(true);
-        const data = await getComplaints();
+        const data = await getComplaints({ createdBy: session.user.id });
         if (isMounted) {
           setComplaints(data);
           setIsLoading(false);
@@ -149,9 +159,8 @@ export default function OpenComplaintsCarousel() {
     loadComplaints();
     return () => {
       isMounted = false;
-      media.removeEventListener("change", update);
     };
-  }, []);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (cardCount === 0) return;
@@ -362,6 +371,216 @@ export default function OpenComplaintsCarousel() {
               <Link href="/complaints/new">File new complaint</Link>
             </Button>
           </div>
+        ) : cardCount === 1 ? (
+          <div className="mt-6 flex justify-center">
+            {openComplaints.map((complaint, index) => {
+              const cardHeight = 460;
+              const roadmap = complaint.timeline ?? [];
+              return (
+                <article
+                  key={`${complaint.id}-${index}`}
+                  tabIndex={0}
+                  className={cn(
+                    "group relative overflow-hidden rounded-[2rem] border",
+                    "border-primary/40 bg-surface shadow-[0_20px_50px_rgba(26,63,170,0.08)]",
+                    "backdrop-blur-md outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  )}
+                  style={{
+                    height: cardHeight,
+                    width: cardWidth,
+                    minWidth: cardWidth,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(26,63,170,0.04),transparent_48%)]" />
+                  <div className="relative flex h-full flex-col gap-3 p-5 md:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                          {complaint.id}
+                        </p>
+                        <h3 className="mt-2 text-lg font-semibold text-heading">
+                          {complaint.title}
+                        </h3>
+                        <p className="mt-1 text-sm text-muted">
+                          {complaint.room} · {complaint.category}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <StatusPill status={complaint.status} />
+                        <span
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-medium",
+                            priorityStyles[complaint.priority.toLowerCase()] ||
+                              "bg-muted/15 text-muted border-muted/30"
+                          )}
+                        >
+                          {complaint.priority.charAt(0).toUpperCase() +
+                            complaint.priority.slice(1).toLowerCase()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm leading-6 text-body">
+                      {complaint.description}
+                    </p>
+
+                    <div className="flex-1 overflow-y-auto rounded-2xl border border-border/80 bg-surface/70 p-3 backdrop-blur-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                            Roadmap
+                          </p>
+                          <p className="text-xs text-body">
+                            Latest updates
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-muted">
+                          {formatDateTime(complaint.updatedAt)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 space-y-3">
+                        {roadmap.map((item, timelineIndex) => {
+                          const isLast = timelineIndex === roadmap.length - 1;
+
+                          return (
+                            <div
+                              key={`${complaint.id}-${item.label}-${timelineIndex}`}
+                              className="relative pl-5"
+                            >
+                              <span
+                                className={cn(
+                                  "absolute left-[0.2rem] top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surface",
+                                  timelineIndex === 0 ? "bg-primary" : "bg-accent"
+                                )}
+                              />
+                              {!isLast && (
+                                <span className="absolute left-[0.6rem] top-4 h-[calc(100%+0.5rem)] w-px bg-border" />
+                              )}
+                              <p className="text-xs font-medium text-heading">{item.label}</p>
+                              <p className="mt-0.5 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                                {formatDateTime(item.time)}
+                              </p>
+                            </div>
+                          );
+                        })}
+
+                        {roadmap.length === 0 && (
+                          <p className="text-xs text-muted">No updates yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {(complaint.status.toLowerCase() === "pending" ||
+                        complaint.status.toLowerCase() === "open") &&
+                        !complaint.assignedTo && (
+                          <Button
+                            type="button"
+                            onClick={() => setCloseConfirm(complaint)}
+                            size="sm"
+                            className="inline-flex items-center gap-2 border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500 text-xs"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-3 w-3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Close
+                          </Button>
+                        )}
+
+                      {(complaint.status === "Assigned" || complaint.status === "In Progress") &&
+                        complaint.assignedTo && (
+                          <Button
+                            type="button"
+                            onClick={() => setRemindVendor(complaint)}
+                            size="sm"
+                            disabled={!canSendReminder(complaint.id)}
+                            className="inline-flex items-center gap-2 border-blue-500 bg-blue-500 text-surface disabled:cursor-not-allowed disabled:opacity-50 hover:bg-transparent hover:text-blue-500 disabled:hover:bg-blue-500 disabled:hover:text-surface text-xs"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-3 w-3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                            {canSendReminder(complaint.id)
+                              ? "Remind"
+                              : `In ${timeRemaining[complaint.id] || "..."}`}
+                          </Button>
+                        )}
+
+                      {complaint.status === "Fixed" &&
+                        complaint.workCompleted &&
+                        !complaint.otpVerified && (
+                          <Button
+                            type="button"
+                            onClick={() => handleOpenVerifyModal(complaint)}
+                            size="sm"
+                            className="inline-flex items-center gap-2 border-purple-500 bg-purple-500 text-surface hover:bg-transparent hover:text-purple-500 text-xs"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-3 w-3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                              <path d="M10 17l-5-5" />
+                              <path d="M14 12l-4 5" />
+                            </svg>
+                            Verify
+                          </Button>
+                        )}
+
+                      {complaint.status === "Fixed" && complaint.otpVerified && (
+                        <Button
+                          type="button"
+                          onClick={() => setReportComplaint(complaint)}
+                          size="sm"
+                          className="inline-flex items-center gap-2 border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500 text-xs"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 3l9 16H3l9-16z" />
+                            <path d="M12 9v4" />
+                            <path d="M12 17h.01" />
+                          </svg>
+                          Report
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         ) : (
           <div className="mt-6">
             <div className="relative mx-auto flex max-w-full items-center w-full">
@@ -469,7 +688,7 @@ export default function OpenComplaintsCarousel() {
                               </p>
                             </div>
                             <span className="text-xs font-medium text-muted">
-                              {complaint.updatedAt}
+                              {formatDateTime(complaint.updatedAt)}
                             </span>
                           </div>
 
@@ -493,7 +712,7 @@ export default function OpenComplaintsCarousel() {
                                   )}
                                   <p className="text-xs font-medium text-heading">{item.label}</p>
                                   <p className="mt-0.5 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
-                                    {item.time}
+                                    {formatDateTime(item.time)}
                                   </p>
                                 </div>
                               );
@@ -507,7 +726,9 @@ export default function OpenComplaintsCarousel() {
 
                         {isProminent && (
                           <div className="flex flex-wrap gap-2 pt-1">
-                            {complaint.status === "Pending" && !complaint.assignedTo && (
+                            {(complaint.status.toLowerCase() === "pending" ||
+                              complaint.status.toLowerCase() === "open") &&
+                              !complaint.assignedTo && (
                               <Button
                                 type="button"
                                 onClick={() => setCloseConfirm(complaint)}

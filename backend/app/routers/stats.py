@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Optional
+from fastapi import APIRouter, Query
 
 from app.db.supabase import get_supabase
 from app.models.schemas import StatsResponse
@@ -9,10 +10,13 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("", response_model=StatsResponse)
-def get_stats() -> StatsResponse:
+def get_stats(created_by: Optional[str] = Query(default=None, alias="createdBy")) -> StatsResponse:
     supabase = get_supabase()
     # use new complaint statuses from production schema
-    response = supabase.table("complaints").select("status").execute()
+    query = supabase.table("complaints").select("status")
+    if created_by:
+        query = query.eq("created_by", created_by)
+    response = query.execute()
     data = response.data or []
 
     active_count = sum(1 for item in data if item["status"] not in ("done", "resolved", "cancelled"))

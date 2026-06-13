@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { getNotifications } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import type { NotificationItem } from "@/lib/types";
@@ -136,7 +136,7 @@ export default function NotificationBell() {
               {unreadNotifications.map((item) => (
                 <div key={item.id} className="rounded-xl border border-border/60 bg-surface/70 p-3">
                   <p className="text-sm font-medium text-heading">{item.title}</p>
-                  <p className="text-xs text-muted">{item.timestamp}</p>
+                  <p className="text-xs text-muted">{formatDateTime(item.timestamp)}</p>
                 </div>
               ))}
             </div>

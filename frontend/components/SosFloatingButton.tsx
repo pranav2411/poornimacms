@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { triggerSosAlert } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,11 +33,14 @@ export default function SosFloatingButton() {
   const [isSuccess, setIsSuccess] = useState(false);
   
   const holdIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { data: session } = useSession();
   const [userId, setUserId] = useState("system");
 
   // Fetch logged-in user UUID
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (session?.user?.id) {
+      setUserId(session.user.id);
+    } else if (typeof window !== "undefined") {
       const rawUser = localStorage.getItem("poornima-user");
       if (rawUser) {
         try {
@@ -49,7 +53,7 @@ export default function SosFloatingButton() {
         }
       }
     }
-  }, []);
+  }, [session]);
 
   // Handle Hold Progress timer
   useEffect(() => {
