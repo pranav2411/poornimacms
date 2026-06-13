@@ -99,9 +99,9 @@ export default function ComplaintsListClient({
         </div>
 
         {/* Filters dropdowns */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {/* Status Filter */}
-          <div className="relative min-w-[150px]">
+          <div className="relative w-full sm:w-auto sm:min-w-[150px]">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -129,7 +129,7 @@ export default function ComplaintsListClient({
           </div>
 
           {/* Department Filter */}
-          <div className="relative min-w-[170px]">
+          <div className="relative w-full sm:w-auto sm:min-w-[170px]">
             <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
@@ -160,7 +160,7 @@ export default function ComplaintsListClient({
 
       {/* Complaints Grid List */}
       <div className="grid gap-3">
-        <div className="grid grid-cols-7 gap-2 border-b border-border pb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted px-2">
+        <div className="hidden md:grid grid-cols-7 gap-2 border-b border-border pb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted px-2">
           <span>ID</span>
           <span>Room</span>
           <span>Category</span>
@@ -193,27 +193,40 @@ export default function ComplaintsListClient({
           filteredComplaints.map((item) => (
             <div
               key={item.id}
-              className="grid grid-cols-7 gap-2 text-sm text-body items-center py-2 hover:bg-surface/30 px-2 rounded-xl transition-all duration-150"
+              className="flex flex-col gap-3 rounded-2xl border border-border bg-surface/50 p-4 hover:bg-surface/70 transition-all duration-150 md:grid md:grid-cols-7 md:gap-2 md:items-center md:py-2 md:px-2 md:rounded-xl md:border-0 md:bg-transparent"
             >
-              <span
-                className="font-medium text-heading font-mono text-xs truncate"
-                title={item.id}
-              >
-                {item.id}
-              </span>
-              <span className="font-mono text-heading">{item.room}</span>
-              <span>{item.category}</span>
-              <div>
-                <StatusPill status={item.status} />
+              <div className="flex items-center justify-between md:contents">
+                <span
+                  className="font-medium text-heading font-mono text-xs truncate"
+                  title={item.id}
+                >
+                  {item.id}
+                </span>
+                <div className="md:hidden">
+                  <StatusPill status={item.status} />
+                </div>
               </div>
-              <span>{item.assignedTo ?? "Unassigned"}</span>
-              <span className="truncate" title={item.createdByName}>
-                {item.createdByName || "Faculty User"}
-              </span>
-              <div className="text-right">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-body md:contents">
+                <span className="md:font-mono md:text-heading">
+                  <span className="text-muted text-xs md:hidden">Room: </span>{item.room}
+                </span>
+                <span>
+                  <span className="text-muted text-xs md:hidden">Category: </span>{item.category}
+                </span>
+                <div className="hidden md:block">
+                  <StatusPill status={item.status} />
+                </div>
+                <span>
+                  <span className="text-muted text-xs md:hidden">Assigned: </span>{item.assignedTo ?? "Unassigned"}
+                </span>
+                <span className="truncate" title={item.createdByName}>
+                  <span className="text-muted text-xs md:hidden">Creator: </span>{item.createdByName || "Faculty User"}
+                </span>
+              </div>
+              <div className="md:text-right">
                 <Link
                   href={`/dashboard/superadmin/complaints/${item.id}`}
-                  className="inline-flex rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-2xs font-semibold py-1.5 px-4.5 shadow-sm transition-all duration-200"
+                  className="inline-flex rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-2xs font-semibold py-1.5 px-4.5 shadow-sm transition-all duration-200 w-full justify-center md:w-auto"
                 >
                   View Details
                 </Link>

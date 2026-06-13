@@ -56,11 +56,30 @@ export default async function SuperadminDepartmentsPage() {
     console.error("Error fetching admins list:", adminError);
   }
 
+  // 3. Fetch all users whose role is 'vendor'
+  const { data: vendors, error: vendorError } = await supabase
+    .from("users")
+    .select("id, name, email, image, department_id")
+    .eq("role", "vendor")
+    .order("name", { ascending: true });
+
+  if (vendorError) {
+    console.error("Error fetching vendors list:", vendorError);
+  }
+
   // Format department data
   const formattedDepartments = (departments || []).map((dept) => {
     const assignedAdmins = (dept.department_admins || [])
       .map((da: any) => da.admin)
       .filter(Boolean);
+    const assignedVendors = (vendors || [])
+      .filter((v: any) => v.department_id === dept.id)
+      .map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        email: v.email,
+        image: v.image,
+      }));
     return {
       id: dept.id,
       name: dept.name,
@@ -68,6 +87,7 @@ export default async function SuperadminDepartmentsPage() {
       created_at: dept.created_at,
       created_by: dept.created_by,
       admins: assignedAdmins,
+      vendors: assignedVendors,
     };
   });
 
@@ -82,6 +102,7 @@ export default async function SuperadminDepartmentsPage() {
       <DepartmentsManagementClient
         initialDepartments={formattedDepartments}
         availableAdmins={admins || []}
+        availableVendors={vendors || []}
       />
     </DashboardShell>
   );

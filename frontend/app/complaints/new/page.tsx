@@ -305,12 +305,18 @@ export default function NewComplaintPage() {
         description,
         priority: priority.toLowerCase(),
         createdBy,
+        images: imagePreview ? [imagePreview] : [],
       });
       setIsSubmitting(false);
       setSubmittedComplaint(res);
       setIsSuccessOpen(true);
-    } catch {
+    } catch (error) {
       setIsSubmitting(false);
+      addToast({
+        title: "Submission Failed",
+        description: error instanceof Error ? error.message : "Failed to register complaint. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

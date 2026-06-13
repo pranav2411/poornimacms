@@ -1,5 +1,6 @@
 export type ComplaintStatus =
   | "Pending"
+  | "Open"
   | "Assigned"
   | "In Progress"
   | "Fixed"
@@ -42,7 +43,10 @@ export type StatItem = {
 };
 
 export type VendorItem = {
+  id: string;
   name: string;
+  email?: string;
+  departmentId?: string | null;
 };
 
 export type NotificationItem = {

@@ -150,11 +150,11 @@ export default function DashboardShell({
       {navOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="absolute inset-0 bg-slate-900/60"
+            className="absolute inset-0 bg-slate-900/60 animate-in fade-in duration-200"
             onClick={() => setNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85%]">
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] animate-in slide-in-from-left duration-300">
             <Sidebar role={role} className="h-full w-full" />
             <Button
               type="button"
@@ -183,13 +183,13 @@ export default function DashboardShell({
 
       <div className="flex flex-1 flex-col lg:h-screen lg:overflow-hidden">
         <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-border bg-surface/85 backdrop-blur-md px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+          <div className="flex items-center gap-3">
             <Button
               type="button"
               onClick={() => setNavOpen(true)}
               size="icon"
               aria-label="Open menu"
-              className="lg:hidden border-border bg-surface text-heading"
+              className="lg:hidden shrink-0 border-border bg-surface text-heading"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -206,19 +206,19 @@ export default function DashboardShell({
                 <path d="M3 18h18" />
               </svg>
             </Button>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="lg:hidden shrink-0">
                 <LogoIcon size={38} />
               </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-xs">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-xs truncate">
                   Poornima College Of Engineering
                 </p>
-                <h1 className="text-lg font-semibold text-heading sm:text-xl">{title}</h1>
-                {subtitle && <p className="text-xs text-muted sm:text-sm">{subtitle}</p>}
+                <h1 className="text-lg font-semibold text-heading sm:text-xl truncate">{title}</h1>
+                {subtitle && <p className="text-xs text-muted sm:text-sm truncate">{subtitle}</p>}
               </div>
             </div>
-            <div className="absolute right-4 top-4 flex items-center gap-3 sm:right-6 sm:top-4 lg:right-8">
+            <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
               <NotificationBell />
               <div className="relative" ref={menuRef}>
                 <Button
@@ -229,7 +229,7 @@ export default function DashboardShell({
                   onClick={() => setMenuOpen((prev) => !prev)}
                   className="flex h-10 w-10 items-center justify-center gap-2 rounded-full border-border bg-surface p-0 text-heading hover:bg-transparent hover:text-heading sm:h-12 sm:w-auto sm:px-4"
                 >
-                  <div className="h-9 w-9 overflow-hidden rounded-full bg-border">
+                  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-border">
                     <Image
                       src={resolvedAvatarUrl}
                       alt={resolvedUserName}
@@ -261,7 +261,7 @@ export default function DashboardShell({
                 {menuOpen && (
                   <div
                     role="menu"
-                    className="absolute right-0 mt-3 w-52 rounded-2xl border border-border bg-surface/95 p-2 shadow-lg"
+                    className="absolute right-0 mt-3 w-52 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface/95 p-2 shadow-lg"
                   >
                     {session?.user?.role === "superadmin" && role !== "superadmin" && (
                       <Button

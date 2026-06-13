@@ -163,11 +163,11 @@ export default function SosFloatingButton() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-red-500/25 bg-slate-950/90 p-6 shadow-2xl backdrop-blur-xl text-slate-100"
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-3xl border border-red-500/25 bg-slate-950/90 p-6 shadow-2xl backdrop-blur-xl text-slate-100"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2 text-red-500">
+              <div className="flex items-start justify-between border-b border-white/10 pb-4 gap-3">
+                <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-red-500">
                   <ShieldAlert className="h-6 w-6 animate-pulse" />
                   EMERGENCY SOS ALERT
                 </h2>

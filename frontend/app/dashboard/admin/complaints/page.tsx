@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
@@ -10,19 +12,24 @@ import { assignVendor, getComplaints, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
 
 export default function AdminComplaintsPage() {
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [vendors, setVendors] = useState<VendorItem[]>([]);
   const [selected, setSelected] = useState("");
 
+  const isSuperadmin = session?.user?.role === "superadmin";
+  const adminDeptId = isSuperadmin ? undefined : (session?.user?.departmentId || undefined);
+
   useEffect(() => {
+    if (session === undefined) return;
     let isMounted = true;
 
     const loadData = async () => {
       try {
         const [complaintsData, vendorsData] = await Promise.all([
-          getComplaints(),
-          getVendors(),
+          getComplaints({ departmentId: adminDeptId }),
+          getVendors({ departmentId: adminDeptId }),
         ]);
         if (!isMounted) return;
         setComplaints(complaintsData);
@@ -39,7 +46,7 @@ export default function AdminComplaintsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [session, adminDeptId]);
 
   const handleAssign = async (vendor: string) => {
     if (!selected) return;
@@ -58,9 +65,9 @@ export default function AdminComplaintsPage() {
     <DashboardShell
       role="admin"
       title="Complaints"
-      subtitle="Assign vendors and track timelines"
-      userName="Admin Desk"
-      avatarUrl="/avatar-placeholder.svg"
+      subtitle={isSuperadmin ? "Assign vendors and track timelines institution-wide" : "Assign vendors and track timelines"}
+      userName={session?.user?.name || "Admin Desk"}
+      avatarUrl={session?.user?.image || "/avatar-placeholder.svg"}
     >
       <GlassCard className="p-6">
         <div className="flex items-center justify-between">
@@ -68,39 +75,54 @@ export default function AdminComplaintsPage() {
             <h2 className="text-lg font-semibold text-heading">Complaint list</h2>
             <p className="text-sm text-muted">Manage assignments by category.</p>
           </div>
-          <Button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="border-primary bg-primary text-surface hover:bg-transparent hover:text-primary"
-          >
-            Assign vendor
-          </Button>
         </div>
         <div className="mt-4 grid gap-3">
           {complaints.map((item) => (
-            <Button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => setSelected(item.id)}
-              className={`flex w-full flex-col items-start gap-3 border bg-surface text-left hover:bg-transparent hover:text-heading ${
-                selected === item.id ? "border-accent/60" : "border-border"
-              }`}
+              className="flex w-full flex-col items-start gap-2 rounded-2xl border border-border bg-surface/75 p-4 text-left shadow-sm transition-all duration-200 hover:bg-surface/90 hover:shadow-md"
             >
-              <div className="flex w-full items-center justify-between">
+              <div className="flex w-full items-start justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-heading">
+                  <p className="text-sm font-bold text-heading font-jakarta">
                     {item.title}
                   </p>
-                  <p className="text-xs text-muted">
-                    {item.room} - {item.category}
+                  <p className="text-xs text-muted mt-1">
+                    Room {item.room} · {item.category}
                   </p>
                 </div>
                 <StatusPill status={item.status} />
               </div>
-              <p className="text-xs text-muted">
-                Assigned: {item.assignedTo ?? "Unassigned"}
-              </p>
-            </Button>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full text-xs text-muted">
+                <span className="truncate">
+                  Assigned Vendor: <strong className="text-body font-semibold">{item.assignedTo ?? "Unassigned"}</strong>
+                </span>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border border-border hover:bg-surface text-2xs font-semibold py-1 h-7 px-3.5"
+                  >
+                    <Link href={`/dashboard/admin/complaints/${item.id}`}>
+                      View Details
+                    </Link>
+                  </Button>
+                  {!item.assignedTo && item.status !== "Closed" && item.status !== "Fixed" && (
+                    <Button
+                      onClick={() => {
+                        setSelected(item.id);
+                        setOpen(true);
+                      }}
+                      className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary transition-all duration-200 text-2xs font-semibold py-1 h-7 px-3.5"
+                    >
+                      Assign Vendor
+                    </Button>
+                  )}
+                  <span className="text-[10px] font-mono">{item.id}</span>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </GlassCard>

@@ -48,6 +48,7 @@ class ComplaintCreate(BaseModel):
     description: str = Field(..., min_length=8, max_length=2000)
     priority: ComplaintPriority
     createdBy: str = Field(..., min_length=1)
+    images: Optional[List[str]] = None
 
 
 class AssignVendorRequest(BaseModel):
@@ -82,6 +83,14 @@ class NotificationItem(BaseModel):
 class VendorItem(BaseModel):
     id: str
     name: str
+    email: Optional[str] = None
+    departmentId: Optional[str] = None
+
+
+class AddVendorRequest(BaseModel):
+    email: str
+    name: str
+    departmentId: str
 
 
 class UserCreate(BaseModel):

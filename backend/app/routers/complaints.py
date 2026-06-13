@@ -160,9 +160,12 @@ def list_complaints(
     assigned_to: Optional[str] = Query(default=None, alias="assignedTo"),
     created_by: Optional[str] = Query(default=None, alias="createdBy"),
     location: Optional[str] = Query(default=None, alias="location"),
+    department_id: Optional[str] = Query(default=None, alias="departmentId"),
 ) -> List[Complaint]:
     supabase = get_supabase()
     query = supabase.table("complaints").select("*").order("updated_at", desc=True)
+    if department_id:
+        query = query.eq("department_id", department_id)
     if status_filter:
         statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
         if statuses:
@@ -317,6 +320,19 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
         raise HTTPException(status_code=500, detail="Failed to create complaint")
 
     complaint_id = response.data[0]["id"]
+
+    # insert images if any
+    if payload.images:
+        image_inserts = []
+        for idx, img in enumerate(payload.images):
+            image_inserts.append({
+                "complaint_id": complaint_id,
+                "public_id": f"img-{int(datetime.now(timezone.utc).timestamp())}-{idx}",
+                "secure_url": img
+            })
+        if image_inserts:
+            supabase.table("complaint_images").insert(image_inserts).execute()
+
     # add initial status history
     supabase.table("complaint_status_history").insert({
         "complaint_id": complaint_id,

@@ -8,6 +8,7 @@ declare module "next-auth" {
       id: string;
       role: "superadmin" | "admin" | "faculty" | "vendor" | null;
       status: "pending" | "verified" | "denied";
+      departmentId?: string | null;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +16,7 @@ declare module "next-auth" {
     userId?: string;
     role?: "superadmin" | "admin" | "faculty" | "vendor" | null;
     status?: "pending" | "verified" | "denied";
+    departmentId?: string | null;
   }
 }
 
@@ -114,7 +116,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const supabase = createAdminClient();
         const { data: dbUser, error } = await supabase
           .from("users")
-          .select("id, role, status")
+          .select("id, role, status, department_id")
           .eq("email", token.email)
           .single();
 
@@ -122,6 +124,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.userId = dbUser.id;
           token.role = dbUser.role;
           token.status = dbUser.status;
+          token.departmentId = dbUser.department_id;
         }
       }
       return token;
@@ -132,6 +135,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.userId as string;
         session.user.role = token.role as any;
         session.user.status = token.status as any;
+        session.user.departmentId = token.departmentId as string;
       }
       return session;
     },

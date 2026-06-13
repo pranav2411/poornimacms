@@ -162,7 +162,7 @@ function SuperadminComplaintDetailContent({
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <GlassCard className="p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
               {complaint.id}
@@ -200,10 +200,21 @@ function SuperadminComplaintDetailContent({
           </p>
         </div>
 
+        {complaint.closeReason && (
+          <div className="mt-6 border-b border-border/50 pb-6">
+            <h3 className="text-sm font-semibold text-heading mb-2">Close Reason</h3>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5">
+              <p className="text-sm text-amber-700 font-medium">
+                {complaint.closeReason}
+              </p>
+            </div>
+          </div>
+        )}
+
         {complaint.images && complaint.images.length > 0 && (
           <div className="mt-6 border-b border-border/50 pb-6">
             <h3 className="text-sm font-semibold text-heading mb-3">Attachments</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {complaint.images.map((imgUrl, idx) => (
                 <div
                   key={idx}
@@ -258,7 +269,10 @@ function SuperadminComplaintDetailContent({
           Updated at {formatDateTime(complaint.updatedAt)}
         </p>
         <div className="mt-4">
-          <ComplaintTimeline activeStep={getActiveStep(complaint.status)} />
+          <ComplaintTimeline
+            activeStep={getActiveStep(complaint.status)}
+            isClosedDirectly={complaint.status === "Closed" && !complaint.assignedTo}
+          />
         </div>
       </GlassCard>
 

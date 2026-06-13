@@ -55,65 +55,104 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.json()) as T;
 };
 
-export const getComplaints = (options?: {
+const mapStatus = (backendStatus: string): Complaint["status"] => {
+  const s = (backendStatus || "").toLowerCase();
+  if (s === "open" || s === "pending") return "Open";
+  if (s === "vendor_assigned" || s === "assigned") return "Assigned";
+  if (s === "in_progress" || s === "in progress") return "In Progress";
+  if (s === "done" || s === "fixed") return "Fixed";
+  if (s === "closed" || s === "resolved" || s === "cancelled") return "Closed";
+  return "Open";
+};
+
+const mapComplaint = (c: any): Complaint => {
+  if (!c) return c;
+  return {
+    ...c,
+    status: mapStatus(c.status),
+    priority: (c.priority ? c.priority.charAt(0).toUpperCase() + c.priority.slice(1) : "Medium") as Complaint["priority"],
+  };
+};
+
+export const getComplaints = async (options?: {
   status?: string;
   assignedTo?: string;
   createdBy?: string;
   location?: string;
-}) =>
-  request<Complaint[]>("/complaints", {
+  departmentId?: string;
+}) => {
+  const data = await request<Complaint[]>("/complaints", {
     query: {
       status: options?.status,
       assignedTo: options?.assignedTo,
       createdBy: options?.createdBy,
       location: options?.location,
+      departmentId: options?.departmentId,
     },
   });
+  return data.map(mapComplaint);
+};
 
-export const getComplaint = (complaintId: string) =>
-  request<Complaint>(`/complaints/${complaintId}`);
+export const getComplaint = async (complaintId: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}`);
+  return mapComplaint(data);
+};
 
-export const createComplaint = (payload: {
+export const createComplaint = async (payload: {
   location: string;
   departmentId: string;
   title: string;
   description: string;
   priority: string;
   createdBy: string;
-}) => request<Complaint>("/complaints", { method: "POST", body: payload });
+  images?: string[];
+}) => {
+  const data = await request<Complaint>("/complaints", { method: "POST", body: payload });
+  return mapComplaint(data);
+};
 
-export const assignVendor = (complaintId: string, vendor: string) =>
-  request<Complaint>(`/complaints/${complaintId}/assign`, {
+export const assignVendor = async (complaintId: string, vendor: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/assign`, {
     method: "POST",
     body: { vendor },
   });
+  return mapComplaint(data);
+};
 
-export const markFixed = (complaintId: string) =>
-  request<Complaint>(`/complaints/${complaintId}/mark-fixed`, {
+export const markFixed = async (complaintId: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/mark-fixed`, {
     method: "POST",
   });
+  return mapComplaint(data);
+};
 
-export const closeComplaint = (complaintId: string, reason: string) =>
-  request<Complaint>(`/complaints/${complaintId}/close`, {
+export const closeComplaint = async (complaintId: string, reason: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/close`, {
     method: "POST",
     body: { reason },
   });
+  return mapComplaint(data);
+};
 
-export const sendReminder = (complaintId: string) =>
-  request<Complaint>(`/complaints/${complaintId}/remind`, {
+export const sendReminder = async (complaintId: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/remind`, {
     method: "POST",
   });
+  return mapComplaint(data);
+};
 
 export const generateOtp = (complaintId: string) =>
   request<{ otp: string; expiresAt: string }>(`/complaints/${complaintId}/otp`, {
     method: "POST",
   });
 
-export const verifyOtp = (complaintId: string, otp: string) =>
-  request<Complaint>(`/complaints/${complaintId}/verify-otp`, {
+export const verifyOtp = async (complaintId: string, otp: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/verify-otp`, {
     method: "POST",
     body: { otp },
   });
+  return mapComplaint(data);
+};
 
 export const reportIssue = (complaintId: string, reason: string, details?: string) =>
   request<{ status: string }>(`/complaints/${complaintId}/report`, {
@@ -121,7 +160,23 @@ export const reportIssue = (complaintId: string, reason: string, details?: strin
     body: { reason, details },
   });
 
-export const getVendors = () => request<VendorItem[]>("/vendors");
+export const getVendors = (options?: { departmentId?: string }) =>
+  request<VendorItem[]>("/vendors", {
+    query: {
+      departmentId: options?.departmentId,
+    },
+  });
+
+export const addVendor = (payload: { email: string; name: string; departmentId: string }) =>
+  request<VendorItem>("/vendors", {
+    method: "POST",
+    body: payload,
+  });
+
+export const removeVendor = (vendorId: string) =>
+  request<{ status: string }>(`/vendors/${vendorId}/remove`, {
+    method: "POST",
+  });
 
 export const getNotifications = (limit = 10) =>
   request<NotificationItem[]>("/notifications", {

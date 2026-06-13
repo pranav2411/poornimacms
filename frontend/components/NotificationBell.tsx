@@ -114,7 +114,7 @@ export default function NotificationBell() {
         )}
       </Button>
       {open && (
-        <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-border bg-surface/90 p-4 shadow-lg">
+        <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-80 max-w-80 rounded-2xl border border-border bg-surface/90 p-4 shadow-lg">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
               Updates
