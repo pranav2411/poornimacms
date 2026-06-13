@@ -12,7 +12,7 @@ export default async function VendorDashboardPage() {
       role="vendor"
       title="Vendor Dashboard"
       subtitle="Assigned repairs and next steps"
-      userName="Ravi Kumar"
+      userName="Vendor"
       avatarUrl="/user-no-av.png"
     >
       <div className="grid gap-6">

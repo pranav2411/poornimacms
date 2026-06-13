@@ -12,7 +12,7 @@ export default async function AdminDashboardPage() {
       role="admin"
       title="Admin Dashboard"
       subtitle="Monitor your category complaints"
-      userName="Admin Desk"
+      userName="Admin"
       avatarUrl="/user-no-av.png"
     >
       <GlassCard className="p-6">

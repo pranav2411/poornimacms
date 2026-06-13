@@ -12,7 +12,7 @@ export default async function FacultyDashboardPage() {
       role="faculty"
       title="Faculty Dashboard"
       subtitle="Complaint pulse across your rooms"
-      userName="Dr. Aditi Sharma"
+      userName="Faculty"
       avatarUrl="/user-no-av.png"
     >
       <div className="grid gap-8">
