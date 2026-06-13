@@ -14,6 +14,7 @@ import {
   getUserByEmail,
   updateUserById,
 } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 type LoginState = "idle" | "loading" | "error";
 
@@ -291,14 +292,7 @@ function LoginPageContent() {
       <div className="absolute inset-0 bg-black/20" />
       <div className="relative z-10 flex w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_36px_96px_rgba(15,23,42,0.4)] lg:min-h-[620px] lg:flex-row">
         <div className="order-2 flex w-full flex-col justify-center px-10 py-12 lg:order-2 lg:w-1/2 lg:px-14">
-          <div className="flex items-center gap-3 text-slate-900">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ede9fe] text-lg font-semibold">
-              P
-            </span>
-            <span className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
-              Poornima CMS
-            </span>
-          </div>
+          <Logo />
           <h1 className="mt-6 text-3xl font-semibold text-slate-900 lg:text-4xl">
             Welcome back to Poornima Complaint Management System
           </h1>

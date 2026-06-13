@@ -10,6 +10,7 @@ import Sidebar from "@/components/Sidebar";
 import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/lib/role-context";
+import { LogoIcon } from "@/components/Logo";
 
 export default function DashboardShell({
   role,
@@ -98,7 +99,7 @@ export default function DashboardShell({
 
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
-      <div className="hidden lg:flex">
+      <div className="hidden lg:flex lg:h-screen lg:sticky lg:top-0 lg:shrink-0">
         <Sidebar role={role} />
       </div>
 
@@ -136,9 +137,9 @@ export default function DashboardShell({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-border bg-surface/80 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+      <div className="flex flex-1 flex-col lg:h-screen lg:overflow-hidden">
+        <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-border bg-surface/85 backdrop-blur-md px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
             <Button
               type="button"
               onClick={() => setNavOpen(true)}
@@ -161,12 +162,17 @@ export default function DashboardShell({
                 <path d="M3 18h18" />
               </svg>
             </Button>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-                Poornima College Of Engineering
-              </p>
-              <h1 className="text-xl font-semibold text-heading">{title}</h1>
-              {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+            <div className="flex items-center gap-3">
+              <div className="lg:hidden shrink-0">
+                <LogoIcon size={38} />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-xs">
+                  Poornima College Of Engineering
+                </p>
+                <h1 className="text-lg font-semibold text-heading sm:text-xl">{title}</h1>
+                {subtitle && <p className="text-xs text-muted sm:text-sm">{subtitle}</p>}
+              </div>
             </div>
             <div className="absolute right-4 top-4 flex items-center gap-3 sm:right-6 sm:top-4 lg:right-8">
               <NotificationBell />
@@ -257,7 +263,7 @@ export default function DashboardShell({
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           {children}
         </main>
       </div>

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/role-context";
+import Logo from "@/components/Logo";
+import Image from "next/image";
 
 const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   faculty: [
@@ -435,9 +437,7 @@ export default function Sidebar({
       )}
     >
       <div className="flex flex-col gap-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted">
-          Poornima CMS
-        </p>
+        <Logo />
         <p className="text-lg font-semibold text-heading capitalize">{roleLabel}</p>
         <nav className="flex flex-col gap-2.5 text-sm">
           {items.map((item) => {
@@ -460,9 +460,22 @@ export default function Sidebar({
           })}
         </nav>
       </div>
-      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-        <p>Poornima College Of Engineering</p>
-        <p className="mt-1">NAAC A+ (AUTONOMOUS)</p>
+      <div className="flex flex-col gap-4">
+        <div className="relative h-[72px] w-full overflow-hidden rounded-xl border border-border shadow-sm">
+          <Image
+            src="/loginpage.png"
+            alt="PCE Campus"
+            fill
+            sizes="(max-width: 1024px) 100vw, 208px"
+            className="object-cover transition-transform duration-300 hover:scale-105"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+        </div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted leading-normal">
+          <p>Poornima College Of Engineering</p>
+          <p className="mt-0.5">NAAC A+ (AUTONOMOUS)</p>
+        </div>
       </div>
     </aside>
   );
