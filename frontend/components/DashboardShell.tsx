@@ -36,8 +36,10 @@ export default function DashboardShell({
     avatarUrl?: string;
   } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const rawUser = window.localStorage.getItem("poornima-user");
     if (!rawUser) return;
 
@@ -194,9 +196,13 @@ export default function DashboardShell({
                       className="h-full w-full object-cover"
                     />
                   </div>
-                  <span className="hidden text-sm font-semibold sm:inline">
-                    {resolvedUserName}
-                  </span>
+                  {mounted ? (
+                    <span className="hidden text-sm font-semibold sm:inline">
+                      {resolvedUserName}
+                    </span>
+                  ) : (
+                    <span className="hidden h-4 w-24 animate-pulse rounded bg-border sm:inline-block" />
+                  )}
                   <svg
                     viewBox="0 0 20 20"
                     className="hidden h-4 w-4 text-muted sm:inline"

@@ -15,7 +15,6 @@ export function LogoIcon({ className, size = 42 }: { className?: string; size?: 
         alt="Poornima Logo"
         width={size}
         height={size}
-        style={{ width: `${size}px`, height: "auto" }}
         className="object-contain"
         priority
       />
