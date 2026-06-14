@@ -29,6 +29,7 @@ class Complaint(BaseModel):
     createdBy: str
     createdByName: Optional[str] = None
     images: List[str] = []
+    fixImages: List[str] = []
     assignedTo: Optional[str] = None
     assignedVendorId: Optional[str] = None
     cancellationReason: Optional[str] = None
@@ -51,9 +52,23 @@ class ComplaintCreate(BaseModel):
     images: Optional[List[str]] = None
 
 
+class ComplaintUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    description: Optional[str] = Field(default=None, min_length=8, max_length=2000)
+    location: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    priority: Optional[ComplaintPriority] = None
+
+
+
 class AssignVendorRequest(BaseModel):
     vendor: str = Field(..., min_length=1)
     assignedBy: Optional[str] = Field(default=None, min_length=1)
+
+
+class MarkFixedRequest(BaseModel):
+    remarks: Optional[str] = Field(default=None, max_length=500)
+    image: Optional[str] = Field(default=None)
+
 
 
 class CloseComplaintRequest(BaseModel):
@@ -72,6 +87,7 @@ class StatItem(BaseModel):
 
 class StatsResponse(BaseModel):
     stats: List[StatItem]
+    avgResolutionTime: Optional[float] = None
 
 
 class NotificationItem(BaseModel):
@@ -132,7 +148,7 @@ class UserItem(BaseModel):
 class SosAlertCreate(BaseModel):
     triggeredBy: str = Field(..., min_length=1)
     emergencyType: str = Field(..., min_length=3, max_length=50)
-    location: Optional[str] = Field(default=None, max_length=255)
+    location: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(default=None, max_length=1000)
 
 

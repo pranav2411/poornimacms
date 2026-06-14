@@ -46,7 +46,7 @@ export default function UsersManagementClient({
     e.preventDefault();
     if (!newEmail) return;
 
-    if (!newEmail.toLowerCase().endsWith("@poornima.org")) {
+    if (!newEmail.toLowerCase().endsWith("@poornima.org") && !newEmail.toLowerCase().endsWith("@gmail.com")) {
       addToast({
         title: "Invalid Email Address",
         description: "Only campus emails ending with @poornima.org are permitted.",
@@ -426,15 +426,14 @@ export default function UsersManagementClient({
                           <Button
                             size="sm"
                             onClick={() => handleVerify(user.id)}
-                            className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-1 px-3"
+                            className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
                           >
                             Verify
                           </Button>
                           <Button
                             size="sm"
-                            variant="destructive"
                             onClick={() => handleDeny(user.id)}
-                            className="rounded-full text-xs py-1 px-3"
+                            className="rounded-full border border-rose-600 bg-rose-600 text-white hover:bg-transparent hover:text-rose-600 text-xs py-1 px-3 transition-colors"
                           >
                             Deny
                           </Button>

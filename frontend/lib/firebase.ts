@@ -36,7 +36,6 @@ export function getGoogleProvider() {
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({
       prompt: "select_account",
-      hd: "poornima.org",
     });
   }
 

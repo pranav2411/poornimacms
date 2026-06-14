@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Query
 
@@ -12,13 +12,17 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 @router.get("", response_model=List[NotificationItem])
-def list_notifications(limit: int = Query(default=10, ge=1, le=50)) -> List[NotificationItem]:
+def list_notifications(
+    user_id: Optional[str] = Query(default=None, alias="userId"),
+    limit: int = Query(default=10, ge=1, le=50)
+) -> List[NotificationItem]:
     supabase = get_supabase()
     # notifications table in new schema has (id, user_id, title, message, is_read, created_at)
+    query = supabase.table("notifications").select("id, title, message, created_at")
+    if user_id:
+        query = query.eq("user_id", user_id)
     response = (
-        supabase.table("notifications")
-        .select("id, title, message, created_at")
-        .order("created_at", desc=True)
+        query.order("created_at", desc=True)
         .limit(limit)
         .execute()
     )
@@ -111,3 +115,11 @@ def list_notifications(limit: int = Query(default=10, ge=1, le=50)) -> List[Noti
         }
         for item in filtered_data
     ]
+
+
+@router.delete("/{notification_id}")
+def delete_notification(notification_id: str):
+    supabase = get_supabase()
+    supabase.table("notifications").delete().eq("id", notification_id).execute()
+    return {"status": "success"}
+

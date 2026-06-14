@@ -23,7 +23,7 @@ export default async function SuperadminUsersPage() {
   // Fetch all users
   const { data: users, error } = await supabase
     .from("users")
-    .select("id, email, name, image, role, status, created_at")
+    .select("id, email, name, image:avatar_url, role, status, created_at")
     .order("name", { ascending: true });
 
   if (error) {

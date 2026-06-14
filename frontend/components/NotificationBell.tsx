@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, formatDateTime } from "@/lib/utils";
-import { getNotifications } from "@/lib/api";
+import { getNotifications, deleteNotification } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import { useSession } from "next-auth/react";
 import type { NotificationItem } from "@/lib/types";
 
 export default function NotificationBell() {
   const { addToast } = useToast();
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
+
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
@@ -19,11 +23,12 @@ export default function NotificationBell() {
   const unreadCount = unreadNotifications.length;
 
   useEffect(() => {
+    if (!userId) return;
     let isMounted = true;
 
     const loadNotifications = async () => {
       try {
-        const data = await getNotifications(10);
+        const data = await getNotifications(10, userId);
         if (!isMounted) return;
 
         const isFirstLoad = processedNotificationsRef.current.size === 0;
@@ -75,11 +80,29 @@ export default function NotificationBell() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [addToast]);
+  }, [addToast, userId]);
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
+    // Delete all current notifications on backend
+    const deletePromises = notifications.map((n) => deleteNotification(n.id));
+    try {
+      await Promise.all(deletePromises);
+    } catch (err) {
+      console.error("Failed to delete all notifications", err);
+    }
     const ids = new Set(notifications.map((n) => n.id));
     setReadIds(ids);
+    setNotifications([]);
+  };
+
+  const handleDismissNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch (error) {
+      console.error("Failed to delete notification", error);
+    }
   };
 
   return (
@@ -132,11 +155,28 @@ export default function NotificationBell() {
           {unreadNotifications.length === 0 ? (
             <p className="mt-3 text-sm text-muted">No updates yet.</p>
           ) : (
-            <div className="mt-3 grid gap-3">
+            <div className="mt-3 grid gap-3 max-h-60 overflow-y-auto">
               {unreadNotifications.map((item) => (
-                <div key={item.id} className="rounded-xl border border-border/60 bg-surface/70 p-3">
+                <div key={item.id} className="relative rounded-xl border border-border/60 bg-surface/70 p-3 pr-8">
                   <p className="text-sm font-medium text-heading">{item.title}</p>
                   <p className="text-xs text-muted">{formatDateTime(item.timestamp)}</p>
+                  <button
+                    onClick={(e) => handleDismissNotification(item.id, e)}
+                    className="absolute right-2 top-2 text-muted hover:text-heading transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               ))}
             </div>
@@ -146,4 +186,3 @@ export default function NotificationBell() {
     </div>
   );
 }
-

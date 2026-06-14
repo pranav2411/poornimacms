@@ -94,7 +94,7 @@ export default function VerifyingPage() {
             <Button
               onClick={handleRefresh}
               disabled={loading}
-              className="w-full rounded-full bg-primary hover:bg-primary/90 text-white shadow-md transition-all duration-200"
+              className="w-full rounded-full shadow-md transition-all duration-200"
             >
               {loading ? "Checking status..." : "Refresh Status"}
             </Button>

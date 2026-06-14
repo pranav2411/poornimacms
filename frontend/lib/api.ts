@@ -80,6 +80,7 @@ export const getComplaints = async (options?: {
   createdBy?: string;
   location?: string;
   departmentId?: string;
+  assignedVendorId?: string;
 }) => {
   const data = await request<Complaint[]>("/complaints", {
     query: {
@@ -88,6 +89,7 @@ export const getComplaints = async (options?: {
       createdBy: options?.createdBy,
       location: options?.location,
       departmentId: options?.departmentId,
+      assignedVendorId: options?.assignedVendorId,
     },
   });
   return data.map(mapComplaint);
@@ -111,6 +113,22 @@ export const createComplaint = async (payload: {
   return mapComplaint(data);
 };
 
+export const updateComplaint = async (
+  complaintId: string,
+  payload: {
+    title?: string;
+    description?: string;
+    location?: string;
+    priority?: string;
+  }
+) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return mapComplaint(data);
+};
+
 export const assignVendor = async (complaintId: string, vendor: string) => {
   const data = await request<Complaint>(`/complaints/${complaintId}/assign`, {
     method: "POST",
@@ -119,8 +137,23 @@ export const assignVendor = async (complaintId: string, vendor: string) => {
   return mapComplaint(data);
 };
 
-export const markFixed = async (complaintId: string) => {
+export const markFixed = async (complaintId: string, remarks?: string, image?: string) => {
   const data = await request<Complaint>(`/complaints/${complaintId}/mark-fixed`, {
+    method: "POST",
+    body: { remarks, image },
+  });
+  return mapComplaint(data);
+};
+
+export const verifySolution = async (complaintId: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/verify-solution`, {
+    method: "POST",
+  });
+  return mapComplaint(data);
+};
+
+export const notifyVendor = async (complaintId: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/notify-vendor`, {
     method: "POST",
   });
   return mapComplaint(data);
@@ -173,23 +206,35 @@ export const addVendor = (payload: { email: string; name: string; departmentId: 
     body: payload,
   });
 
-export const removeVendor = (vendorId: string) =>
+export const removeVendor = (vendorId: string, departmentId?: string) =>
   request<{ status: string }>(`/vendors/${vendorId}/remove`, {
     method: "POST",
+    query: { departmentId },
   });
 
-export const getNotifications = (limit = 10) =>
+export const getNotifications = (limit = 10, userId?: string) =>
   request<NotificationItem[]>("/notifications", {
-    query: { limit },
+    query: { limit, userId },
   });
 
-export const getStats = async (options?: { createdBy?: string }) => {
-  const response = await request<{ stats: StatItem[] }>("/stats", {
+export const deleteNotification = (notificationId: string) =>
+  request<{ status: string }>(`/notifications/${notificationId}`, {
+    method: "DELETE",
+  });
+
+export const getStats = async (options?: {
+  createdBy?: string;
+  departmentId?: string;
+  assignedVendorId?: string;
+}) => {
+  const response = await request<{ stats: StatItem[]; avgResolutionTime?: number }>("/stats", {
     query: {
       createdBy: options?.createdBy,
+      departmentId: options?.departmentId,
+      assignedVendorId: options?.assignedVendorId,
     },
   });
-  return response.stats;
+  return response;
 };
 
 export const getCategories = () => request<string[]>("/meta/categories");

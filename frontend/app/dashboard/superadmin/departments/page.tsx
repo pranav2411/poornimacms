@@ -35,7 +35,7 @@ export default async function SuperadminDepartmentsPage() {
           id,
           name,
           email,
-          image
+          image:avatar_url
         )
       )
     `)
@@ -48,7 +48,7 @@ export default async function SuperadminDepartmentsPage() {
   // 2. Fetch all users whose role is 'admin'
   const { data: admins, error: adminError } = await supabase
     .from("users")
-    .select("id, name, email, image")
+    .select("id, name, email, image:avatar_url")
     .eq("role", "admin")
     .order("name", { ascending: true });
 
@@ -59,7 +59,7 @@ export default async function SuperadminDepartmentsPage() {
   // 3. Fetch all users whose role is 'vendor'
   const { data: vendors, error: vendorError } = await supabase
     .from("users")
-    .select("id, name, email, image, department_id")
+    .select("id, name, email, image:avatar_url, department_id")
     .eq("role", "vendor")
     .order("name", { ascending: true });
 
@@ -67,19 +67,47 @@ export default async function SuperadminDepartmentsPage() {
     console.error("Error fetching vendors list:", vendorError);
   }
 
+  // 4. Fetch department vendor mappings
+  let deptVendors: any[] = [];
+  const { data: dvData, error: deptVendorsError } = await supabase
+    .from("department_vendors")
+    .select(`
+      department_id,
+      vendor:users (
+        id,
+        name,
+        email,
+        image:avatar_url
+      )
+    `);
+
+  if (deptVendorsError) {
+    console.error("Error fetching department vendors mapping (falling back to legacy column):", deptVendorsError);
+  } else {
+    deptVendors = dvData || [];
+  }
+
   // Format department data
   const formattedDepartments = (departments || []).map((dept) => {
     const assignedAdmins = (dept.department_admins || [])
       .map((da: any) => da.admin)
       .filter(Boolean);
-    const assignedVendors = (vendors || [])
-      .filter((v: any) => v.department_id === dept.id)
-      .map((v: any) => ({
-        id: v.id,
-        name: v.name,
-        email: v.email,
-        image: v.image,
-      }));
+      
+    // Fallback: If mapping query failed, fetch from the legacy user.department_id column
+    const assignedVendors = deptVendorsError
+      ? (vendors || [])
+          .filter((v: any) => v.department_id === dept.id)
+          .map((v: any) => ({
+            id: v.id,
+            name: v.name,
+            email: v.email,
+            image: v.image,
+          }))
+      : (deptVendors || [])
+          .filter((dv: any) => dv.department_id === dept.id)
+          .map((dv: any) => dv.vendor)
+          .filter(Boolean);
+
     return {
       id: dept.id,
       name: dept.name,

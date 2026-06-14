@@ -11,6 +11,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/lib/role-context";
 import { LogoIcon } from "@/components/Logo";
+import SosFloatingButton from "@/components/SosFloatingButton";
 
 export default function DashboardShell({
   role,
@@ -315,6 +316,7 @@ export default function DashboardShell({
           {children}
         </main>
       </div>
+      <SosFloatingButton />
     </div>
   );
 }

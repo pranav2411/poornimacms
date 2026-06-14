@@ -29,13 +29,15 @@ type Department = {
 export default function DepartmentsManagementClient({
   initialDepartments,
   availableAdmins,
+  availableVendors,
 }: {
   initialDepartments: Department[];
   availableAdmins: Admin[];
-  availableVendors: Admin[]; // Kept for backwards compatibility in page prop
+  availableVendors: Admin[];
 }) {
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [availableAdminsState, setAvailableAdminsState] = useState<Admin[]>(availableAdmins);
+  const [availableVendorsState, setAvailableVendorsState] = useState<Admin[]>(availableVendors);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
@@ -246,23 +248,27 @@ export default function DepartmentsManagementClient({
         image: null,
       };
 
-      // Update local state (remove vendor from other departments if re-assigned)
+      // Update local state (vendors can be in multiple departments, so DO NOT remove from other departments!)
       setDepartments((prev) =>
         prev.map((d) => {
-          // Remove from previous department
-          const cleanedVendors = d.vendors.filter((v) => v.id !== formattedVendor.id);
           if (d.id === departmentId) {
+            const cleanedVendors = d.vendors.filter((v) => v.id !== formattedVendor.id);
             return {
               ...d,
               vendors: [...cleanedVendors, formattedVendor],
             };
           }
-          return {
-            ...d,
-            vendors: cleanedVendors,
-          };
+          return d;
         })
       );
+
+      // Add to availableVendorsState if not already present
+      setAvailableVendorsState((prev) => {
+        if (prev.some((v) => v.id === formattedVendor.id)) {
+          return prev;
+        }
+        return [...prev, formattedVendor];
+      });
 
       // Update active modal view state
       if (selectedDeptForVendors) {
@@ -274,12 +280,8 @@ export default function DepartmentsManagementClient({
               ...prev,
               vendors: [...cleaned, formattedVendor],
             };
-          } else {
-            return {
-              ...prev,
-              vendors: prev.vendors.filter((v) => v.id !== formattedVendor.id),
-            };
           }
+          return prev;
         });
       }
 
@@ -298,7 +300,7 @@ export default function DepartmentsManagementClient({
     }
   };
 
-  // Remove Vendor from Department (clears their department field)
+  // Remove Vendor from Department
   const handleRemoveVendorFromDept = async (departmentId: string, vendorId: string, name: string) => {
     const confirmed = await confirm({
       title: "Remove Vendor",
@@ -311,7 +313,7 @@ export default function DepartmentsManagementClient({
     if (!confirmed) return;
 
     try {
-      await removeVendor(vendorId);
+      await removeVendor(vendorId, departmentId);
 
       setDepartments((prev) =>
         prev.map((d) => {
@@ -541,6 +543,7 @@ export default function DepartmentsManagementClient({
           <ManageDeptVendorsModal
             department={selectedDeptForVendors}
             departments={departments}
+            availableVendors={availableVendorsState}
             onClose={() => setSelectedDeptForVendors(null)}
             onAddVendor={handleAddVendorToDept}
             onRemoveVendor={handleRemoveVendorFromDept}
@@ -742,15 +745,15 @@ function ManageDeptAdminsModal({
                   return (
                     <label
                       key={admin.id}
-                      className="flex items-center gap-3 rounded-xl border border-border/40 hover:border-border px-3 py-2 hover:bg-muted cursor-pointer text-xs transition-colors"
+                      className="group flex items-center gap-3 rounded-xl border border-border/40 hover:border-primary/30 hover:bg-primary/[0.04] px-3 py-2 cursor-pointer text-xs transition-all duration-200"
                     >
                       <input
                         type="checkbox"
                         checked={isAssigned}
                         onChange={() => onToggleAdmin(department.id, admin.id)}
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
                       />
-                      <div className="relative h-6 w-6 overflow-hidden rounded-full border border-border bg-muted">
+                      <div className="relative h-6 w-6 overflow-hidden rounded-full border border-border bg-muted shrink-0">
                         <Image
                           src={admin.image || "/user-no-av.png"}
                           alt={admin.name || "Admin"}
@@ -760,10 +763,10 @@ function ManageDeptAdminsModal({
                         />
                       </div>
                       <div className="flex-1 truncate">
-                        <p className="font-semibold text-heading truncate">
+                        <p className="font-semibold text-heading truncate group-hover:text-primary transition-colors duration-200">
                           {admin.name || "Admin"}
                         </p>
-                        <p className="text-[10px] text-muted truncate">{admin.email}</p>
+                        <p className="text-[10px] text-muted truncate group-hover:text-primary/70 transition-colors duration-200">{admin.email}</p>
                       </div>
                     </label>
                   );
@@ -781,12 +784,14 @@ function ManageDeptAdminsModal({
 function ManageDeptVendorsModal({
   department,
   departments,
+  availableVendors,
   onClose,
   onAddVendor,
   onRemoveVendor,
 }: {
   department: Department;
   departments: Department[];
+  availableVendors: Admin[];
   onClose: () => void;
   onAddVendor: (deptId: string, email: string, name: string) => Promise<void>;
   onRemoveVendor: (deptId: string, vendorId: string, name: string) => Promise<void>;
@@ -800,6 +805,9 @@ function ManageDeptVendorsModal({
   // Quick creation fields (fallback when email search returns 404)
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createName, setCreateName] = useState("");
+
+  // Search filter for available vendors list
+  const [vendorFilterQuery, setVendorFilterQuery] = useState("");
 
   const handleSearchUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -868,10 +876,20 @@ function ManageDeptVendorsModal({
     }
   };
 
-  // Find if a vendor is currently assigned to any other department
-  const getExistingDeptInfo = (userId: string) => {
-    return departments.find((d) => d.vendors.some((v) => v.id === userId));
+  const handleToggleVendor = async (vendor: Admin, isAssigned: boolean) => {
+    if (isAssigned) {
+      await onRemoveVendor(department.id, vendor.id, vendor.name || vendor.email);
+    } else {
+      await onAddVendor(department.id, vendor.email, vendor.name || vendor.email.split("@")[0]);
+    }
   };
+
+  // Filter available vendors based on search input
+  const filteredVendors = availableVendors.filter(
+    (v) =>
+      v.name?.toLowerCase().includes(vendorFilterQuery.toLowerCase()) ||
+      v.email.toLowerCase().includes(vendorFilterQuery.toLowerCase())
+  );
 
   return (
     <motion.div
@@ -908,11 +926,11 @@ function ManageDeptVendorsModal({
             </Button>
           </div>
 
-          {/* User Search & Add form */}
+          {/* User Search & Add form (if not on list) */}
           <div className="mt-4 border-b border-border pb-4">
             <form onSubmit={handleSearchUser}>
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
-                Add Vendor by Email
+                Search System User (to make them vendor)
               </label>
               <div className="flex gap-2">
                 <input
@@ -927,7 +945,7 @@ function ManageDeptVendorsModal({
                   type="submit"
                   size="sm"
                   disabled={searching || !searchEmail}
-                  className="rounded-xl bg-primary hover:bg-primary/90 text-white px-4 text-xs"
+                  className="rounded-xl border border-primary bg-primary text-white hover:bg-transparent hover:text-primary px-4 text-xs transition-colors"
                 >
                   {searching ? "Searching..." : "Search"}
                 </Button>
@@ -959,25 +977,10 @@ function ManageDeptVendorsModal({
                     </div>
                   </div>
 
-                  {/* Render promote/assign button with proper checks */}
                   {(() => {
-                    const existingDept = getExistingDeptInfo(searchedUser.id);
-                    if (existingDept) {
-                      if (existingDept.id === department.id) {
-                        return <span className="text-xs text-muted font-medium">Already assigned</span>;
-                      } else {
-                        return (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={promoting}
-                            onClick={handleAssignClick}
-                            className="rounded-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] px-3 h-8"
-                          >
-                            {promoting ? "Moving..." : `Move from ${existingDept.name}`}
-                          </Button>
-                        );
-                      }
+                    const isAssigned = department.vendors.some((v) => v.id === searchedUser.id);
+                    if (isAssigned) {
+                      return <span className="text-xs text-muted font-medium">Already assigned</span>;
                     }
                     return (
                       <Button
@@ -985,7 +988,7 @@ function ManageDeptVendorsModal({
                         size="sm"
                         disabled={promoting}
                         onClick={handleAssignClick}
-                        className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] px-3 h-8"
+                        className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-[11px] px-3 h-8 transition-colors"
                       >
                         {promoting ? "Assigning..." : "Assign Vendor"}
                       </Button>
@@ -1017,14 +1020,14 @@ function ManageDeptVendorsModal({
                     variant="outline"
                     size="sm"
                     onClick={() => setShowCreateForm(false)}
-                    className="rounded-full text-xs h-8 px-3"
+                    className="rounded-full text-xs h-8 px-3 border-border hover:bg-muted"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={promoting || !createName.trim()}
-                    className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs h-8 px-4 font-semibold"
+                    className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-xs h-8 px-4 font-semibold transition-colors"
                   >
                     {promoting ? "Creating..." : "Create & Assign Vendor"}
                   </Button>
@@ -1033,23 +1036,41 @@ function ManageDeptVendorsModal({
             )}
           </div>
 
-          {/* Assigned vendors list */}
+          {/* Searchable vendors list */}
           <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
-              Assigned Vendors ({department.vendors.length})
-            </p>
-            {department.vendors.length === 0 ? (
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted">
+                Assign System Vendors ({department.vendors.length} assigned)
+              </label>
+            </div>
+            <input
+              type="text"
+              placeholder="Search vendor list..."
+              value={vendorFilterQuery}
+              onChange={(e) => setVendorFilterQuery(e.target.value)}
+              className="w-full mb-3 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-heading outline-none focus:border-primary transition-all duration-200"
+            />
+            
+            {filteredVendors.length === 0 ? (
               <p className="text-xs text-muted py-8 text-center border border-dashed border-border rounded-xl">
-                No vendors assigned to this department yet.
+                No vendors found matching search.
               </p>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
-                {department.vendors.map((vendor) => (
-                  <div
-                    key={vendor.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border/40 px-3 py-2 hover:bg-muted text-xs transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 truncate">
+              <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                {filteredVendors.map((vendor) => {
+                  const isAssigned = department.vendors.some((v) => v.id === vendor.id);
+
+                  return (
+                    <label
+                      key={vendor.id}
+                      className="group flex items-center gap-3 rounded-xl border border-border/40 hover:border-primary/30 hover:bg-primary/[0.04] px-3 py-2 cursor-pointer text-xs transition-all duration-200"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isAssigned}
+                        onChange={() => handleToggleVendor(vendor, isAssigned)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                      />
                       <div className="relative h-6 w-6 overflow-hidden rounded-full border border-border bg-muted shrink-0">
                         <Image
                           src={vendor.image || "/user-no-av.png"}
@@ -1059,23 +1080,15 @@ function ManageDeptVendorsModal({
                           className="object-cover"
                         />
                       </div>
-                      <div className="truncate">
-                        <p className="font-semibold text-heading truncate">
+                      <div className="flex-1 truncate">
+                        <p className="font-semibold text-heading truncate group-hover:text-primary transition-colors duration-200">
                           {vendor.name || "Vendor"}
                         </p>
-                        <p className="text-[10px] text-muted truncate">{vendor.email}</p>
+                        <p className="text-[10px] text-muted truncate group-hover:text-primary/70 transition-colors duration-200">{vendor.email}</p>
                       </div>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => onRemoveVendor(department.id, vendor.id, vendor.name || vendor.email)}
-                      className="rounded-full border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500 text-[10px] px-3.5 h-7 py-0 font-medium"
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>

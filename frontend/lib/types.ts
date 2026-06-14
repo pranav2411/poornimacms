@@ -26,6 +26,7 @@ export type Complaint = {
   createdBy: string;
   createdByName?: string;
   images?: string[];
+  fixImages?: string[];
   timeline?: ComplaintTimelineItem[];
   createdAt: string;
   updatedAt: string;
@@ -35,6 +36,7 @@ export type Complaint = {
   closeReason?: string;
   resolvedAt?: string | null;
   cancelledAt?: string | null;
+  departmentId?: string | null;
 };
 
 export type StatItem = {

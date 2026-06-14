@@ -56,43 +56,6 @@ export default function FacultyDashboardLoading() {
           </div>
         </GlassCard>
 
-        {/* Stats Section Skeleton */}
-        <div className="grid gap-8 md:grid-cols-2">
-          {/* Pie Chart Card Skeleton */}
-          <div className="glass-panel p-6 rounded-3xl min-h-[380px] flex flex-col justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-48" />
-            </div>
-            <div className="flex-1 flex items-center justify-center py-6">
-              {/* Circular donut representation */}
-              <div className="relative h-44 w-44 rounded-full border-[18px] border-muted-foreground/10 flex items-center justify-center">
-                <div className="h-28 w-28 rounded-full bg-surface/30" />
-              </div>
-            </div>
-            <div className="flex justify-center gap-4">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-          </div>
-
-          {/* Bar Chart Card Skeleton */}
-          <div className="glass-panel p-6 rounded-3xl min-h-[380px] flex flex-col justify-between">
-            <Skeleton className="h-6 w-32" />
-            <div className="flex-1 flex items-end justify-between gap-4 py-8 px-4">
-              <Skeleton className="h-[40%] w-10 rounded-t-lg" />
-              <Skeleton className="h-[75%] w-10 rounded-t-lg" />
-              <Skeleton className="h-[55%] w-10 rounded-t-lg" />
-              <Skeleton className="h-[90%] w-10 rounded-t-lg" />
-            </div>
-            <div className="flex justify-between px-2">
-              <Skeleton className="h-3 w-12" />
-              <Skeleton className="h-3 w-12" />
-              <Skeleton className="h-3 w-12" />
-              <Skeleton className="h-3 w-12" />
-            </div>
-          </div>
-        </div>
       </div>
     </DashboardShell>
   );

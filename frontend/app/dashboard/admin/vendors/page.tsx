@@ -99,7 +99,7 @@ export default function AdminVendorsPage() {
     if (!newEmail || !newName) return;
 
     const emailClean = newEmail.trim().toLowerCase();
-    if (!emailClean.endsWith("@poornima.org")) {
+    if (!emailClean.endsWith("@poornima.org") && !emailClean.endsWith("@gmail.com")) {
       addToast({
         title: "Invalid Email Address",
         description: "Only campus emails ending with @poornima.org are permitted.",

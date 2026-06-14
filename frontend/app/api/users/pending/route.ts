@@ -21,7 +21,7 @@ export async function GET() {
   try {
     const { data: users, error } = await supabase
       .from("users")
-      .select("id, name, email, image, created_at")
+      .select("id, name, email, image:avatar_url, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
 

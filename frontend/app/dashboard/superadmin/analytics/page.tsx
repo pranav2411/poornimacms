@@ -1,22 +1,49 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import DashboardShell from "@/components/DashboardShell";
+import { getStats } from "@/lib/api";
+import SuperadminAnalyticsClient from "./SuperadminAnalyticsClient";
 
-export default function SuperadminAnalyticsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SuperadminAnalyticsPage() {
+  const session = await auth();
+
+  // Validate authentication and superadmin authorization
+  if (!session || !session.user) {
+    redirect("/login");
+  }
+
+  if (session.user.role !== "superadmin") {
+    redirect("/unauthorized");
+  }
+
+  const supabase = createAdminClient();
+
+  // Fetch departments, vendors and initial global stats concurrently
+  const [deptsResult, vendorsResult, initialStats] = await Promise.all([
+    supabase.from("departments").select("id, name").order("name", { ascending: true }),
+    supabase.from("users").select("id, name").eq("role", "vendor").order("name", { ascending: true }),
+    getStats(),
+  ]);
+
+  const departments = deptsResult.data || [];
+  const vendors = vendorsResult.data || [];
+
   return (
     <DashboardShell
       role="superadmin"
-      title="Analytics"
-      subtitle="Complaint volume and resolution health"
-      userName="Chief Admin"
-      avatarUrl="/avatar-placeholder.svg"
+      title="Global Analytics"
+      subtitle="Institutional complaint volume and resolution health"
+      userName={session.user.name || "Chief Admin"}
+      avatarUrl={session.user.image || "/user-no-av.png"}
     >
-      <div className="rounded-2xl border border-dashed border-border bg-surface/70 p-10 text-center">
-        <p className="text-base font-semibold text-heading">
-          No analytical data available
-        </p>
-        <p className="mt-2 text-sm text-muted">
-          Analytics will appear once enough complaints are recorded.
-        </p>
-      </div>
+      <SuperadminAnalyticsClient
+        initialStatsResult={initialStats}
+        departments={departments}
+        vendors={vendors}
+      />
     </DashboardShell>
   );
 }

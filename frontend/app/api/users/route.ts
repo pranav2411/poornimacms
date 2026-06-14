@@ -28,9 +28,9 @@ export async function POST(request: Request) {
     const cleanedEmail = email.trim().toLowerCase();
     
     // Validate email domain
-    if (!cleanedEmail.endsWith("@poornima.org")) {
+    if (!cleanedEmail.endsWith("@poornima.org") && !cleanedEmail.endsWith("@gmail.com")) {
       return NextResponse.json(
-        { error: "Only @poornima.org emails are allowed" },
+        { error: "Only @poornima.org and @gmail.com emails are allowed" },
         { status: 400 }
       );
     }

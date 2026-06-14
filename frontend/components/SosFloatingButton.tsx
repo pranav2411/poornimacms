@@ -134,7 +134,7 @@ export default function SosFloatingButton() {
 
   // Button triggers on Mouse Down / Touch Start
   const startHolding = () => {
-    if (emergencyType && isAcknowledged && !isSubmitting && !isSuccess) {
+    if (emergencyType && isAcknowledged && location.trim() && !isSubmitting && !isSuccess) {
       setIsHolding(true);
     }
   };
@@ -252,7 +252,7 @@ export default function SosFloatingButton() {
                     <div className="space-y-1">
                       <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5" />
-                        2. Location (optional)
+                        2. Location *
                       </label>
                       <input
                         type="text"
@@ -295,22 +295,24 @@ export default function SosFloatingButton() {
                   <div className="pt-2">
                     <button
                       type="button"
-                      disabled={!emergencyType || !isAcknowledged || isSubmitting}
+                      disabled={!emergencyType || !isAcknowledged || !location.trim() || isSubmitting}
                       onMouseDown={startHolding}
                       onMouseUp={stopHolding}
                       onMouseLeave={stopHolding}
                       onTouchStart={startHolding}
                       onTouchEnd={stopHolding}
-                      className={`relative overflow-hidden w-full h-14 rounded-2xl font-bold tracking-wider select-none outline-none transition-all duration-200 ${
-                        emergencyType && isAcknowledged && !isSubmitting
-                          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white cursor-pointer hover:brightness-110 active:scale-[0.99] shadow-md shadow-red-600/10"
-                          : "bg-white/5 border border-white/5 text-slate-500 cursor-not-allowed"
+                      className={`relative overflow-hidden w-full h-14 rounded-2xl font-bold tracking-wider select-none outline-none transition-all duration-300 border ${
+                        emergencyType && isAcknowledged && location.trim() && !isSubmitting
+                          ? isHolding
+                            ? "border-red-600 text-white cursor-pointer shadow-[0_0_25px_rgba(220,38,38,0.4)]"
+                            : "border-red-500 text-red-500 bg-red-500/[0.02] hover:bg-red-500/[0.06] cursor-pointer shadow-md shadow-red-500/5"
+                          : "bg-white/5 border-white/5 text-slate-500 cursor-not-allowed"
                       }`}
                     >
                       {/* Hold progress bar background */}
-                      {emergencyType && isAcknowledged && !isSubmitting && (
+                      {emergencyType && isAcknowledged && location.trim() && !isSubmitting && (
                         <div
-                          className="absolute left-0 top-0 bottom-0 bg-red-800 transition-all duration-75 pointer-events-none"
+                          className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-red-600 to-rose-600 transition-all duration-75 pointer-events-none"
                           style={{ width: `${progress}%` }}
                         />
                       )}

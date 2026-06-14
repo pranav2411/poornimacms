@@ -27,7 +27,7 @@ const roleToDashboard: Record<string, string> = {
 };
 
 const isAllowedCampusEmail = (email: string | null | undefined) =>
-  Boolean(email && email.toLowerCase().endsWith("@poornima.org"));
+  Boolean(email && (email.toLowerCase().endsWith("@poornima.org") || email.toLowerCase().endsWith("@gmail.com")));
 
 const getGoogleProfile = (user: {
   displayName: string | null;

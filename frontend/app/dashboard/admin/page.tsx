@@ -295,13 +295,15 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-3 self-end md:self-auto">
                     <StatusPill status={item.status} />
-                    <Button
-                      variant="outline"
-                      onClick={() => handleAssignClick(item.id)}
-                      className="rounded-full text-2xs py-1 h-7 border-border hover:bg-surface"
-                    >
-                      Reassign
-                    </Button>
+                    {item.status !== "Fixed" && item.status !== "Closed" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleAssignClick(item.id)}
+                        className="rounded-full text-2xs py-1 h-7 border-border hover:bg-surface"
+                      >
+                        Reassign
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

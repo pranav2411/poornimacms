@@ -57,8 +57,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       // Enforce Poornima campus emails only
-      if (!user.email.toLowerCase().endsWith("@poornima.org")) {
-        console.log("Email does not end with @poornima.org:", user.email);
+      if (!user.email.toLowerCase().endsWith("@poornima.org") && !user.email.toLowerCase().endsWith("@gmail.com")) {
+        console.log("Email does not end with @poornima.org or @gmail.com:", user.email);
         return false;
       }
 

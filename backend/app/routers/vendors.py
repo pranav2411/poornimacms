@@ -15,20 +15,38 @@ def list_vendors(
     department_id: Optional[str] = Query(default=None, alias="departmentId")
 ) -> List[VendorItem]:
     supabase = get_supabase()
-    query = supabase.table("users").select("id, name, email, department_id").eq("role", "vendor")
     if department_id:
-        query = query.eq("department_id", department_id)
-    response = query.order("name").execute()
-    data = response.data or []
-    return [
-        {
-            "id": item["id"],
-            "name": item["name"],
-            "email": item.get("email"),
-            "departmentId": item.get("department_id"),
-        }
-        for item in data
-    ]
+        # Query via department_vendors junction table
+        response = (
+            supabase.table("department_vendors")
+            .select("vendor_id, vendor:users(id, name, email)")
+            .eq("department_id", department_id)
+            .execute()
+        )
+        data = []
+        for item in (response.data or []):
+            vendor = item.get("vendor")
+            if vendor:
+                data.append({
+                    "id": vendor["id"],
+                    "name": vendor["name"],
+                    "email": vendor.get("email"),
+                    "departmentId": department_id
+                })
+        return sorted(data, key=lambda x: x["name"])
+    else:
+        # List all users with role = 'vendor'
+        response = supabase.table("users").select("id, name, email").eq("role", "vendor").order("name").execute()
+        data = response.data or []
+        return [
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "email": item.get("email"),
+                "departmentId": None
+            }
+            for item in data
+        ]
 
 
 @router.post("", response_model=VendorItem)
@@ -46,13 +64,12 @@ def add_vendor(payload: AddVendorRequest) -> VendorItem:
     )
     if existing.data:
         user = existing.data[0]
-        # Update user to be a vendor for this department
+        # Update user to be a vendor
         updated = (
             supabase.table("users")
             .update(
                 {
                     "role": "vendor",
-                    "department_id": payload.departmentId,
                     "status": "verified",
                     "is_verified": True,
                     "name": payload.name or user.get("name"),
@@ -66,7 +83,9 @@ def add_vendor(payload: AddVendorRequest) -> VendorItem:
             raise HTTPException(
                 status_code=500, detail="Failed to update existing user to vendor"
             )
-        item = updated.data[0]
+        vendor_id = user["id"]
+        vendor_name = payload.name or user.get("name")
+        vendor_email = user.get("email")
     else:
         # Create a new vendor user
         import datetime
@@ -76,7 +95,6 @@ def add_vendor(payload: AddVendorRequest) -> VendorItem:
             "name": payload.name,
             "email": email_clean,
             "role": "vendor",
-            "department_id": payload.departmentId,
             "status": "verified",
             "is_verified": True,
             "is_active": True,
@@ -86,26 +104,44 @@ def add_vendor(payload: AddVendorRequest) -> VendorItem:
             raise HTTPException(
                 status_code=500, detail="Failed to create vendor user"
             )
-        item = created.data[0]
+        vendor_id = created.data[0]["id"]
+        vendor_name = created.data[0]["name"]
+        vendor_email = created.data[0]["email"]
+
+    # Assign vendor to the department in department_vendors
+    if payload.departmentId:
+        supabase.table("department_vendors").insert({
+            "department_id": payload.departmentId,
+            "vendor_id": vendor_id
+        }).execute()
 
     return {
-        "id": item["id"],
-        "name": item["name"],
-        "email": item["email"],
-        "departmentId": item.get("department_id"),
+        "id": vendor_id,
+        "name": vendor_name,
+        "email": vendor_email,
+        "departmentId": payload.departmentId,
     }
 
 
 @router.post("/{vendor_id}/remove")
-def remove_vendor(vendor_id: str):
+def remove_vendor(
+    vendor_id: str,
+    department_id: Optional[str] = Query(default=None, alias="departmentId")
+):
     supabase = get_supabase()
-    response = (
-        supabase.table("users")
-        .update({"department_id": None})
-        .eq("id", vendor_id)
-        .eq("role", "vendor")
-        .execute()
-    )
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Vendor not found")
+    if department_id:
+        response = (
+            supabase.table("department_vendors")
+            .delete()
+            .eq("vendor_id", vendor_id)
+            .eq("department_id", department_id)
+            .execute()
+        )
+    else:
+        response = (
+            supabase.table("department_vendors")
+            .delete()
+            .eq("vendor_id", vendor_id)
+            .execute()
+        )
     return {"status": "success"}

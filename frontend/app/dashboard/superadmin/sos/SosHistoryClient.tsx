@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/toast";
@@ -13,6 +14,8 @@ export default function SosHistoryClient({
 }: {
   initialAlerts: SosAlertHistoryItem[];
 }) {
+  const { data: session } = useSession();
+  const isSuperadmin = session?.user?.role === "superadmin";
   const [alerts, setAlerts] = useState<SosAlertHistoryItem[]>(initialAlerts);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "resolved">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -215,7 +218,7 @@ export default function SosHistoryClient({
                     )}
                   </div>
 
-                  {isActive && (
+                  {isActive && isSuperadmin && (
                     <div className="flex items-center justify-end mt-2 md:mt-0">
                       <Button
                         onClick={() => handleResolve(alert.id)}

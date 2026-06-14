@@ -9,7 +9,7 @@ import ComplaintTimeline from "@/components/ComplaintTimeline";
 import AssignVendorModal from "@/components/AssignVendorModal";
 import CloseComplaintModal from "@/components/CloseComplaintModal";
 import { Button } from "@/components/ui/button";
-import { assignVendor, getComplaint, getVendors, closeComplaint, deleteComplaint } from "@/lib/api";
+import { assignVendor, getComplaint, getVendors, closeComplaint, deleteComplaint, verifySolution } from "@/lib/api";
 import { useConfirm } from "@/lib/confirm-context";
 import { useToast } from "@/lib/toast";
 import type { Complaint, VendorItem } from "@/lib/types";
@@ -40,12 +40,12 @@ function SuperadminComplaintDetailContent({
 
     const loadData = async () => {
       try {
-        const [complaintData, vendorsData] = await Promise.all([
-          getComplaint(id),
-          getVendors(),
-        ]);
+        const complaintData = await getComplaint(id);
         if (!isMounted) return;
         setComplaint(complaintData);
+
+        const vendorsData = await getVendors({ departmentId: complaintData.departmentId || undefined });
+        if (!isMounted) return;
         setVendors(vendorsData);
 
         if (shouldAutoAssign && complaintData.status !== "Closed") {
@@ -86,6 +86,24 @@ function SuperadminComplaintDetailContent({
       console.error("Error closing complaint:", err);
     } finally {
       setClosing(false);
+    }
+  };
+
+  const handleVerifySolution = async () => {
+    if (!complaint) return;
+    try {
+      const updated = await verifySolution(complaint.id);
+      setComplaint(updated);
+      addToast({
+        title: "Complaint Resolved",
+        description: `Complaint ${complaint.id} has been marked resolved directly.`,
+      });
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to resolve complaint",
+        variant: "destructive",
+      });
     }
   };
 
@@ -211,23 +229,48 @@ function SuperadminComplaintDetailContent({
           </div>
         )}
 
-        {complaint.images && complaint.images.length > 0 && (
+        {/* Vendor Resolution Proof and Updates */}
+        {complaint && (complaint.status === "Fixed" || complaint.status === "Closed" || (complaint.fixImages && complaint.fixImages.length > 0)) && (
           <div className="mt-6 border-b border-border/50 pb-6">
-            <h3 className="text-sm font-semibold text-heading mb-3">Attachments</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {complaint.images.map((imgUrl, idx) => (
-                <div
-                  key={idx}
-                  className="relative h-48 overflow-hidden rounded-xl border border-border bg-muted/30"
-                >
-                  <img
-                    src={imgUrl}
-                    alt={`Attachment ${idx + 1}`}
-                    className="h-full w-full object-cover transition-transform duration-200 hover:scale-105"
-                  />
+            <h3 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-fixed animate-pulse" />
+              Vendor Updates & Resolution Proof
+            </h3>
+            
+            {(() => {
+              const fixTimelineItem = complaint.timeline?.find(
+                (item) => item.label?.toLowerCase() === "done" || item.label?.toLowerCase() === "fixed"
+              );
+              const remarks = fixTimelineItem?.remarks || (complaint.status === "Fixed" ? "Work marked as completed by vendor." : null);
+              return remarks ? (
+                <div className="mb-4 rounded-xl border border-border/80 bg-surface/40 p-4 backdrop-blur-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-1">Vendor Remarks</p>
+                  <p className="text-sm text-body italic font-medium">"{remarks}"</p>
                 </div>
-              ))}
-            </div>
+              ) : null;
+            })()}
+
+            {complaint.fixImages && complaint.fixImages.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">Fix Proof Images</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {complaint.fixImages.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      className="relative h-48 overflow-hidden rounded-xl border border-border bg-muted/30 shadow-sm"
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`Resolution Proof ${idx + 1}`}
+                        className="h-full w-full object-cover transition-transform duration-200 hover:scale-105"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted italic">No proof images uploaded by vendor.</p>
+            )}
           </div>
         )}
 
@@ -253,11 +296,20 @@ function SuperadminComplaintDetailContent({
               </Button>
               <Button
                 type="button"
-                onClick={() => setOpen(true)}
-                className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
+                onClick={handleVerifySolution}
+                className="rounded-full border border-purple-500 bg-purple-500 text-white hover:bg-transparent hover:text-purple-500 text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
               >
-                Assign Vendor
+                Mark Resolved
               </Button>
+              {complaint.status !== "Fixed" && (
+                <Button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="rounded-full border border-primary bg-primary text-white hover:bg-transparent hover:text-primary text-xs font-semibold py-2.5 px-6 shadow-sm transition-all duration-200 cursor-pointer"
+                >
+                  Assign Vendor
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -273,6 +325,31 @@ function SuperadminComplaintDetailContent({
             activeStep={getActiveStep(complaint.status)}
             isClosedDirectly={complaint.status === "Closed" && !complaint.assignedTo}
           />
+        </div>
+
+        <div className="mt-8 border-t border-border/50 pt-6">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-heading mb-3">Status Logs</h4>
+          <div className="space-y-3">
+            {complaint.timeline && complaint.timeline.length > 0 ? (
+              complaint.timeline.map((step, idx) => (
+                <div key={idx} className="flex gap-3 text-xs leading-relaxed">
+                  <div className="w-[60px] shrink-0 text-muted font-mono text-[10px]">
+                    {formatDateTime(step.time).split(" ")[0]}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-heading">{step.label}</span>
+                    {step.remarks && (
+                      <p className="text-muted mt-0.5 text-[11px] italic bg-muted/20 px-2 py-1 rounded-md">
+                        {step.remarks}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted italic">No logs available.</p>
+            )}
+          </div>
         </div>
       </GlassCard>
 

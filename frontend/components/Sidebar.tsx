@@ -1,12 +1,13 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/role-context";
 import Logo from "@/components/Logo";
 import Image from "next/image";
+import { getSosHistory } from "@/lib/api";
 
 const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   faculty: [
@@ -17,11 +18,13 @@ const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   vendor: [
     { label: "Home", href: "/dashboard/vendor" },
     { label: "Assignments", href: "/dashboard/vendor/assignments" },
+    { label: "Analytics", href: "/dashboard/vendor/analytics" },
   ],
   admin: [
     { label: "Home", href: "/dashboard/admin" },
     { label: "Complaints", href: "/dashboard/admin/complaints" },
     { label: "Vendors", href: "/dashboard/admin/vendors" },
+    { label: "Analytics", href: "/dashboard/admin/analytics" },
   ],
   superadmin: [
     { label: "Home", href: "/dashboard/superadmin" },
@@ -446,6 +449,7 @@ function SidebarIcon({ label, active, uid }: { label: string; active: boolean; u
     case "Analytics":
       return <AnalyticsIcon active={active} uid={uid} />;
     case "SOS History":
+    case "Active SOS":
       return <SosHistoryIcon active={active} uid={uid} />;
     default:
       return null;
@@ -461,7 +465,43 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const uid = useId();
-  const items = navConfig[role];
+  const [hasActiveSos, setHasActiveSos] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkSos = async () => {
+      try {
+        const alerts = await getSosHistory();
+        const active = alerts.some((a) => a.status === "active");
+        if (isMounted) setHasActiveSos(active);
+      } catch (err) {
+        console.error("Sidebar SOS check failed:", err);
+      }
+    };
+    checkSos();
+    const interval = setInterval(checkSos, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  let items = [...navConfig[role]];
+  if (role === "superadmin") {
+    if (!hasActiveSos) {
+      items = items.filter((item) => item.label !== "SOS History");
+    }
+  } else {
+    if (hasActiveSos) {
+      if (!items.some((item) => item.label === "Active SOS")) {
+        items.push({
+          label: "Active SOS",
+          href: `/dashboard/${role}/sos`,
+        });
+      }
+    }
+  }
+
   const roleLabel = role === "faculty" ? "Faculty Dashboard" : role;
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
@@ -19,6 +20,7 @@ import { useToast } from "@/lib/toast";
 import { formatDateTime } from "@/lib/utils";
 
 export default function FacultyComplaintsPage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -269,7 +271,7 @@ export default function FacultyComplaintsPage() {
                     <span className="text-xs text-muted">{formatDateTime(item.updatedAt)}</span>
                     <Button
                       type="button"
-                      onClick={() => setOpenDetailsId(item.id)}
+                      onClick={() => router.push(`/dashboard/faculty/complaints/${item.id}`)}
                       size="sm"
                       className="border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
                     >
