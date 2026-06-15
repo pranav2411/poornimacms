@@ -18,12 +18,14 @@ const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   vendor: [
     { label: "Home", href: "/dashboard/vendor" },
     { label: "Assignments", href: "/dashboard/vendor/assignments" },
+    { label: "Reports", href: "/dashboard/vendor/reports" },
     { label: "Analytics", href: "/dashboard/vendor/analytics" },
   ],
   admin: [
     { label: "Home", href: "/dashboard/admin" },
     { label: "Complaints", href: "/dashboard/admin/complaints" },
     { label: "Vendors", href: "/dashboard/admin/vendors" },
+    { label: "Reports", href: "/dashboard/admin/reports" },
     { label: "Analytics", href: "/dashboard/admin/analytics" },
   ],
   superadmin: [
@@ -31,6 +33,7 @@ const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
     { label: "Users", href: "/dashboard/superadmin/users" },
     { label: "Departments", href: "/dashboard/superadmin/departments" },
     { label: "Complaints", href: "/dashboard/superadmin/complaints" },
+    { label: "Reports", href: "/dashboard/superadmin/reports" },
     { label: "Analytics", href: "/dashboard/superadmin/analytics" },
     { label: "SOS History", href: "/dashboard/superadmin/sos" },
   ],
@@ -427,6 +430,41 @@ const SosHistoryIcon = ({ active, uid }: { active: boolean; uid: string }) => {
   );
 };
 
+const ReportsIcon = ({ active, uid }: { active: boolean; uid: string }) => {
+  const gid = `${uid}-reports`;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? `url(#${gid})` : "currentColor"}
+      strokeWidth={active ? 1.8 : 1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn(
+        "transition-all duration-200 group-hover:scale-105 group-hover:text-primary",
+        active
+          ? "drop-shadow-[0_4px_8px_rgba(59,130,246,0.35)] -translate-y-0.5 scale-105"
+          : "text-slate-400"
+      )}
+    >
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#3B82F6" />
+          <stop offset="100%" stopColor="#2563EB" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+        fill={active ? `url(#${gid})` : "none"}
+        fillOpacity={active ? 0.18 : 0}
+      />
+    </svg>
+  );
+};
+
 function SidebarIcon({ label, active, uid }: { label: string; active: boolean; uid: string }) {
   switch (label) {
     case "Home":
@@ -448,6 +486,8 @@ function SidebarIcon({ label, active, uid }: { label: string; active: boolean; u
       return <DepartmentsIcon active={active} uid={uid} />;
     case "Analytics":
       return <AnalyticsIcon active={active} uid={uid} />;
+    case "Reports":
+      return <ReportsIcon active={active} uid={uid} />;
     case "SOS History":
     case "Active SOS":
       return <SosHistoryIcon active={active} uid={uid} />;

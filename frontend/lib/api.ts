@@ -3,6 +3,7 @@ import type {
   NotificationItem,
   StatItem,
   VendorItem,
+  ReportItem,
 } from "@/lib/types";
 
 type RequestOptions = {
@@ -384,5 +385,20 @@ export const resolveSosAlert = (alertId: string) =>
 
 export const deleteComplaint = (complaintId: string) =>
   request<void>(`/complaints/${complaintId}`, { method: "DELETE" });
+
+export const getReports = (options: {
+  userId: string;
+  role: string;
+  departmentId?: string;
+  vendorId?: string;
+}) =>
+  request<ReportItem[]>("/complaints/reports", {
+    query: {
+      userId: options.userId,
+      role: options.role,
+      departmentId: options.departmentId,
+      vendorId: options.vendorId,
+    },
+  });
 
 

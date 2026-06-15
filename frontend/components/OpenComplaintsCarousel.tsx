@@ -366,19 +366,32 @@ export default function OpenComplaintsCarousel() {
           </div>
         ) : openComplaints.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-border bg-surface/70 p-6 text-center">
-            <p className="text-sm font-semibold text-heading">
-              No open complaints right now.
-            </p>
-            <p className="mt-2 text-sm text-muted">
-              Have a complaint? File one and we'll get it in the queue.
-            </p>
-            <Button
-              asChild
-              size="sm"
-              className="mt-4 border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
-            >
-              <Link href="/complaints/new">File new complaint</Link>
-            </Button>
+            {session?.user?.role === "vendor" ? (
+              <>
+                <p className="text-sm font-semibold text-heading">
+                  No assigned complaints right now.
+                </p>
+                <p className="mt-2 text-sm text-muted">
+                  Please wait for your admin to assign you complaints.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-heading">
+                  No open complaints right now.
+                </p>
+                <p className="mt-2 text-sm text-muted">
+                  Have a complaint? File one and we'll get it in the queue.
+                </p>
+                <Button
+                  asChild
+                  size="sm"
+                  className="mt-4 border-accent bg-accent text-surface hover:bg-transparent hover:text-accent"
+                >
+                  <Link href="/complaints/new">File new complaint</Link>
+                </Button>
+              </>
+            )}
           </div>
         ) : cardCount === 1 ? (
           <div className="mt-6 flex justify-center">

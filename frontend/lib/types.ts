@@ -56,3 +56,19 @@ export type NotificationItem = {
   title: string;
   timestamp: string;
 };
+
+export type ReportItem = {
+  id: string;
+  complaintNo: string;
+  complaintId: string;
+  title: string;
+  reason: string;
+  details?: string;
+  reportedBy: string;
+  vendorName: string;
+  vendorId?: string;
+  departmentName: string;
+  departmentId: string;
+  createdAt: string;
+};
+

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/lib/role-context";
 import { LogoIcon } from "@/components/Logo";
 import SosFloatingButton from "@/components/SosFloatingButton";
+import SupportModal from "@/components/SupportModal";
 
 export default function DashboardShell({
   role,
@@ -32,6 +33,7 @@ export default function DashboardShell({
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [storedUser, setStoredUser] = useState<{
     name?: string;
     avatarUrl?: string;
@@ -132,14 +134,9 @@ export default function DashboardShell({
     });
   };
 
-  const handleProfile = () => {
-    setMenuOpen(false);
-    router.push(`/dashboard/${session?.user?.role || role}`);
-  };
-
   const handleHelp = () => {
     setMenuOpen(false);
-    window.location.href = "mailto:support@poornima.org";
+    setSupportOpen(true);
   };
 
   return (
@@ -280,18 +277,9 @@ export default function DashboardShell({
                     )}
                     <Button
                       type="button"
-                      onClick={handleProfile}
-                      size="sm"
-                      className="w-full justify-start border-border bg-surface text-heading hover:bg-transparent hover:text-heading"
-                      role="menuitem"
-                    >
-                      Profile
-                    </Button>
-                    <Button
-                      type="button"
                       onClick={handleHelp}
                       size="sm"
-                      className="mt-2 w-full justify-start border-border bg-surface text-heading hover:bg-transparent hover:text-heading"
+                      className="mt-2 w-full justify-start rounded-full border-primary bg-transparent text-primary hover:bg-primary hover:text-white transition-all duration-200"
                       role="menuitem"
                     >
                       Get help
@@ -317,6 +305,7 @@ export default function DashboardShell({
         </main>
       </div>
       <SosFloatingButton />
+      <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} />
     </div>
   );
 }

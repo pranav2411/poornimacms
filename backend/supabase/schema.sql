@@ -181,3 +181,41 @@ CREATE INDEX idx_complaints_vendor ON complaints(assigned_vendor_id);
 CREATE INDEX idx_history_complaint ON complaint_status_history(complaint_id);
 CREATE INDEX idx_assignment_complaint ON complaint_assignments(complaint_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
+
+-- Reports Table
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  complaint_id UUID NOT NULL,
+  reported_by UUID NOT NULL,
+  reason VARCHAR(255) NOT NULL,
+  details TEXT,
+  assigned_vendor_id UUID,
+  assigned_admin_id UUID,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+ALTER TABLE reports
+ADD CONSTRAINT fk_reports_complaint
+FOREIGN KEY (complaint_id)
+REFERENCES complaints(id)
+ON DELETE CASCADE;
+
+ALTER TABLE reports
+ADD CONSTRAINT fk_reports_reporter
+FOREIGN KEY (reported_by)
+REFERENCES users(id);
+
+ALTER TABLE reports
+ADD CONSTRAINT fk_reports_vendor
+FOREIGN KEY (assigned_vendor_id)
+REFERENCES users(id);
+
+ALTER TABLE reports
+ADD CONSTRAINT fk_reports_admin
+FOREIGN KEY (assigned_admin_id)
+REFERENCES users(id);
+
+CREATE INDEX idx_reports_complaint ON reports(complaint_id);
+CREATE INDEX idx_reports_vendor ON reports(assigned_vendor_id);
+CREATE INDEX idx_reports_admin ON reports(assigned_admin_id);
+

@@ -601,15 +601,44 @@ export default function UsersManagementClient({
                           </select>
                         </td>
                         <td className="py-4 text-right">
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={user.id === currentUserId}
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="rounded-full text-xs py-1 px-3"
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            {user.status === "denied" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleVerify(user.id)}
+                                className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
+                              >
+                                Verify
+                              </Button>
+                            )}
+                            {user.status === "pending" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleVerify(user.id)}
+                                  className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
+                                >
+                                  Verify
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleDeny(user.id)}
+                                  className="rounded-full border border-rose-600 bg-rose-600 text-white hover:bg-transparent hover:text-rose-600 text-xs py-1 px-3 transition-colors"
+                                >
+                                  Deny
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={user.id === currentUserId}
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="rounded-full text-xs py-1 px-3"
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))

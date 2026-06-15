@@ -1,13 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import { signOut } from "next-auth/react";
+import { signOut as firebaseSignOut } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
+import SupportModal from "@/components/SupportModal";
 
 export default function UnauthorizedPage() {
+  const [showHelp, setShowHelp] = useState(false);
+
   const handleLogout = () => {
-    // Sign out of NextAuth and redirect back to the login page
-    void signOut({ callbackUrl: "/login" });
+    // Clear local storage user profile
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("poornima-user");
+    }
+    // Sign out of Firebase and NextAuth and redirect back to the login page
+    void firebaseSignOut(getFirebaseAuth()).finally(() => {
+      void signOut({ callbackUrl: "/login" });
+    });
   };
 
   return (
@@ -54,10 +66,7 @@ export default function UnauthorizedPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() =>
-                (window.location.href =
-                  "mailto:support@poornima.org?subject=CMS%20Access%20Denied")
-              }
+              onClick={() => setShowHelp(true)}
               className="w-full rounded-full border-border bg-transparent text-heading hover:bg-surface/50"
             >
               Contact Support
@@ -65,6 +74,8 @@ export default function UnauthorizedPage() {
           </div>
         </div>
       </GlassCard>
+
+      <SupportModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }

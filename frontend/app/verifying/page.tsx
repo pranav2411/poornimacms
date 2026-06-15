@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
+import SupportModal from "@/components/SupportModal";
 
 export default function VerifyingPage() {
   const router = useRouter();
@@ -109,43 +110,7 @@ export default function VerifyingPage() {
         </div>
       </GlassCard>
 
-      {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setShowHelp(false)}
-          />
-          <GlassCard className="relative z-10 w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-semibold text-heading font-jakarta">
-              Need Assistance?
-            </h3>
-            <p className="mt-2 text-sm text-body">
-              If your account verification is taking too long, please contact support.
-            </p>
-            <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-mono text-slate-600 border border-slate-100">
-              support@poornima.org
-            </div>
-            <div className="mt-6 flex gap-3">
-              <Button
-                className="flex-1 rounded-full bg-primary text-white"
-                onClick={() =>
-                  (window.location.href =
-                    "mailto:support@poornima.org?subject=CMS%20Account%20Verification")
-                }
-              >
-                Send Email
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 rounded-full"
-                onClick={() => setShowHelp(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </GlassCard>
-        </div>
-      )}
+      <SupportModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }

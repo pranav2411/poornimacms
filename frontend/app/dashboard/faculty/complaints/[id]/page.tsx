@@ -561,8 +561,8 @@ function FacultyComplaintDetailContent({
                 </Button>
               )}
 
-              {/* Edit Complaint Button: visible if not closed */}
-              {!isClosed && (
+              {/* Edit Complaint Button: visible only while it's open/pending and not assigned to any vendor */}
+              {(complaint.status?.toLowerCase() === "open" || complaint.status?.toLowerCase() === "pending") && !complaint.assignedTo && (
                 <Button
                   type="button"
                   onClick={() => setEditModalOpen(true)}
@@ -606,8 +606,8 @@ function FacultyComplaintDetailContent({
                   </>
                 )}
 
-              {/* Report Button: for Fixed/Closed status */}
-              {(complaint.status === "Fixed" || complaint.status === "Closed") && (
+              {/* Report Button: for Fixed status only */}
+              {complaint.status === "Fixed" && (
                 <Button
                   type="button"
                   onClick={() => setReportModalOpen(true)}

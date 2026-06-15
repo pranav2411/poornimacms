@@ -31,9 +31,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         image: { label: "Image", type: "text" },
       },
       async authorize(credentials) {
-        console.log("NextAuth authorize callback triggered. Credentials:", credentials);
         if (!credentials || !credentials.uid || !credentials.email) {
-          console.log("Authorize failed: missing credentials.uid or credentials.email");
           return null;
         }
         return {
@@ -50,15 +48,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async signIn({ user, credentials }) {
-      console.log("NextAuth signIn callback triggered. User:", user, "Credentials:", credentials);
       if (!user.email) {
-        console.log("No email in user object");
         return false;
       }
 
       // Enforce Poornima campus emails only
       if (!user.email.toLowerCase().endsWith("@poornima.org") && !user.email.toLowerCase().endsWith("@gmail.com")) {
-        console.log("Email does not end with @poornima.org or @gmail.com:", user.email);
         return false;
       }
 
@@ -77,7 +72,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         if (!dbUser) {
-          console.log("User not found in DB. Attempting to insert...");
           // INSERT new user with pending status and null role
           const { error: insertError } = await supabase.from("users").insert({
             email: user.email,
@@ -93,17 +87,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             console.error("Failed to insert new user in signIn callback:", insertError);
             return false;
           }
-          console.log("Successfully inserted new pending user.");
           return true;
         }
 
-        console.log("Found DB user:", dbUser);
         if (dbUser.status === "denied") {
-          console.log("User status is denied. Blocking sign-in.");
           return false; // block sign-in
         }
 
-        console.log("Allowing sign-in for verified/pending user.");
         return true; // allow sign-in
       } catch (err) {
         console.error("Unhandled error in signIn callback:", err);

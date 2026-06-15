@@ -305,6 +305,171 @@ def list_complaints(
     return results
 
 
+
+
+@router.get("/reports", response_model=List[Dict[str, Any]])
+def list_reports(
+    user_id: str = Query(..., alias="userId"),
+    role: str = Query(..., alias="role"),
+    department_id: Optional[str] = Query(default=None, alias="departmentId"),
+    vendor_id: Optional[str] = Query(default=None, alias="vendorId"),
+) -> List[Dict[str, Any]]:
+    import re
+    supabase = get_supabase()
+    
+    # 1. Try to query from "reports" table
+    reports_table_exists = False
+    try:
+        supabase.table("reports").select("id").limit(1).execute()
+        reports_table_exists = True
+    except Exception as e:
+        err_msg = str(e)
+        if "relation" in err_msg.lower() or "public.reports" in err_msg or "PGRST205" in err_msg:
+            reports_table_exists = False
+        else:
+            reports_table_exists = True
+            
+    if reports_table_exists:
+        query = supabase.table("reports").select(
+            "*, complaints!inner(*, departments(name), creator:users!created_by(name))"
+        )
+        
+        # Apply role-based filtering:
+        # "only to the admin who assigned the vendor and to the vendor who was assigned"
+        if role == "admin":
+            query = query.eq("assigned_admin_id", user_id)
+        elif role == "vendor":
+            query = query.eq("assigned_vendor_id", user_id)
+        elif role in ("superadmin", "super_admin"):
+            if department_id:
+                query = query.eq("complaints.department_id", department_id)
+            if vendor_id:
+                query = query.eq("assigned_vendor_id", vendor_id)
+                
+        # Execute query
+        resp = query.order("created_at", desc=True).execute()
+        raw_reports = resp.data or []
+        
+        # Format the output for the client
+        formatted = []
+        for r in raw_reports:
+            comp = r.get("complaints") or {}
+            dept = comp.get("departments") or {}
+            creator = comp.get("creator") or {}
+            
+            # Fetch vendor details
+            vendor_name = "Unassigned"
+            if r.get("assigned_vendor_id"):
+                v_resp = supabase.table("users").select("name").eq("id", r["assigned_vendor_id"]).limit(1).execute()
+                if v_resp.data:
+                    vendor_name = v_resp.data[0]["name"]
+                    
+            formatted.append({
+                "id": r["id"],
+                "complaintNo": comp.get("complaint_no"),
+                "complaintId": comp.get("id"),
+                "title": comp.get("title"),
+                "reason": r.get("reason"),
+                "details": r.get("details"),
+                "reportedBy": creator.get("name") or "Faculty User",
+                "vendorName": vendor_name,
+                "vendorId": r.get("assigned_vendor_id"),
+                "departmentName": dept.get("name") or "General",
+                "departmentId": comp.get("department_id"),
+                "createdAt": r.get("created_at")
+            })
+        return formatted
+
+    else:
+        # FALLBACK: Query from "notifications" table!
+        # Find all notifications that start with "[REPORT]"
+        query = supabase.table("notifications").select("id, user_id, title, message, created_at")
+        
+        # If user is admin or vendor, only query their notifications
+        if role in ("admin", "vendor"):
+            query = query.eq("user_id", user_id)
+            
+        resp = query.order("created_at", desc=True).execute()
+        raw_notifs = resp.data or []
+        
+        # Filter notifications that start with "[REPORT]"
+        reports_notifs = []
+        for n in raw_notifs:
+            title = n.get("title") or ""
+            if title.startswith("[REPORT]"):
+                reports_notifs.append(n)
+                
+        # Group notifications by complaint_no and timestamp to deduplicate
+        seen_reports = set()
+        formatted = []
+        
+        for n in reports_notifs:
+            title = n["title"]
+            match = re.match(r"^\[REPORT\]\s*(CMP-\d{4}-\d{6,10}):\s*(.*)$", title)
+            if match:
+                comp_no = match.group(1)
+                reason = match.group(2)
+            else:
+                comp_no = title.replace("[REPORT]", "").strip().split(":")[0].strip()
+                reason = title.split(":")[-1].strip() if ":" in title else title
+                
+            details = n.get("message") or ""
+            created_at = n.get("created_at")
+            
+            key = f"{comp_no}-{created_at}"
+            if key in seen_reports:
+                continue
+            seen_reports.add(key)
+            
+            # Fetch complaint details
+            comp_resp = supabase.table("complaints").select("*").eq("complaint_no", comp_no).limit(1).execute()
+            if not comp_resp.data:
+                continue
+            comp = comp_resp.data[0]
+            
+            # department name
+            dept_resp = supabase.table("departments").select("name").eq("id", comp.get("department_id")).limit(1).execute()
+            dept_name = (dept_resp.data or [{}])[0].get("name") or "General"
+            
+            # vendor name
+            vendor_name = "Unassigned"
+            assigned_vendor_id = comp.get("assigned_vendor_id")
+            if assigned_vendor_id:
+                v_resp = supabase.table("users").select("name").eq("id", assigned_vendor_id).limit(1).execute()
+                if v_resp.data:
+                    vendor_name = v_resp.data[0]["name"]
+                    
+            # reporter name
+            creator_resp = supabase.table("users").select("name").eq("id", comp.get("created_by")).limit(1).execute()
+            reporter_name = (creator_resp.data or [{}])[0].get("name") or "Faculty User"
+            
+            # Filter for superadmin / admin / vendor role-based visibility in fallback mode
+            if role in ("admin", "vendor"):
+                pass
+            elif role in ("superadmin", "super_admin"):
+                if department_id and comp.get("department_id") != department_id:
+                    continue
+                if vendor_id and assigned_vendor_id != vendor_id:
+                    continue
+            
+            formatted.append({
+                "id": n["id"],
+                "complaintNo": comp_no,
+                "complaintId": comp.get("id"),
+                "title": comp.get("title"),
+                "reason": reason,
+                "details": details,
+                "reportedBy": reporter_name,
+                "vendorName": vendor_name,
+                "vendorId": assigned_vendor_id,
+                "departmentName": dept_name,
+                "departmentId": comp.get("department_id"),
+                "createdAt": created_at
+            })
+            
+        return formatted
+
+
 @router.get("/{complaint_no}", response_model=Complaint)
 def get_complaint(complaint_no: str) -> Complaint:
     info = _get_complaint_row(complaint_no)
@@ -628,13 +793,75 @@ def send_reminder(complaint_no: str) -> Complaint:
 def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, str]:
     supabase = get_supabase()
     info = _get_complaint_row(complaint_no)
-    system_user_id = _get_system_user_id(supabase)
+    complaint = info["row"]
+    complaint_id = complaint["id"]
+    
+    # 1. Enforce that complaint can only be reported if marked completed (status == done)
+    status_val = str(complaint.get("status") or "").lower()
+    if status_val != "done":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Faculty can only report incomplete work when the complaint has been marked completed by the vendor/admin"
+        )
+        
+    assigned_vendor_id = complaint.get("assigned_vendor_id")
+    
+    # Find the assigning admin from complaint_assignments
+    assigned_by = None
+    assignment_resp = (
+        supabase.table("complaint_assignments")
+        .select("assigned_by")
+        .eq("complaint_id", complaint_id)
+        .order("assigned_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if assignment_resp.data:
+        assigned_by = assignment_resp.data[0].get("assigned_by")
+        
+    # Try inserting into reports table if it exists
+    reports_table_exists = False
+    try:
+        supabase.table("reports").select("id").limit(1).execute()
+        reports_table_exists = True
+    except Exception as e:
+        err_msg = str(e)
+        if "relation" in err_msg.lower() or "public.reports" in err_msg or "PGRST205" in err_msg:
+            reports_table_exists = False
+        else:
+            reports_table_exists = True
+            
+    if reports_table_exists:
+        try:
+            report_payload = {
+                "complaint_id": complaint_id,
+                "reported_by": complaint["created_by"],
+                "reason": payload.reason,
+                "details": payload.details,
+                "assigned_vendor_id": assigned_vendor_id,
+                "assigned_admin_id": assigned_by,
+            }
+            supabase.table("reports").insert(report_payload).execute()
+        except Exception:
+            reports_table_exists = False
 
-    supabase.table("notifications").insert({
-        "user_id": system_user_id,
-        "title": f"Report submitted for {complaint_no}: {payload.reason}",
-        "message": payload.details or payload.reason,
-    }).execute()
+    # Send notifications to admin and vendor under reports tab
+    report_title = f"[REPORT] {complaint_no}: {payload.reason}"
+    report_message = payload.details or payload.reason
+    
+    if assigned_by:
+        supabase.table("notifications").insert({
+            "user_id": assigned_by,
+            "title": report_title,
+            "message": report_message,
+        }).execute()
+        
+    if assigned_vendor_id:
+        supabase.table("notifications").insert({
+            "user_id": assigned_vendor_id,
+            "title": report_title,
+            "message": report_message,
+        }).execute()
 
     return {"status": "reported"}
 
@@ -659,6 +886,15 @@ def update_complaint(complaint_no: str, payload: ComplaintUpdate) -> Complaint:
     now = _now_iso()
     info = _get_complaint_row(complaint_no)
     complaint_id = info["row"]["id"]
+    
+    # Ensure complaint can only be edited while it is open/pending and no vendor is assigned
+    status_val = str(info["row"].get("status") or "").lower()
+    if status_val not in ("open", "pending") or info["row"].get("assigned_vendor_id") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Complaint can only be edited while it is open/pending and no vendor has been assigned"
+        )
+
     system_user_id = _get_system_user_id(supabase)
 
     update_payload = payload.model_dump(exclude_unset=True)
