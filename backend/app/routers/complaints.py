@@ -350,6 +350,14 @@ def list_reports(
         resp = query.order("created_at", desc=True).execute()
         raw_reports = resp.data or []
         
+        # Fetch vendor names in one query to avoid N+1 query loops
+        vendor_ids = list(set(r["assigned_vendor_id"] for r in raw_reports if r.get("assigned_vendor_id")))
+        vendor_names_by_id = {}
+        if vendor_ids:
+            v_resp = supabase.table("users").select("id, name").in_("id", vendor_ids).execute()
+            for v in (v_resp.data or []):
+                vendor_names_by_id[v["id"]] = v["name"]
+
         # Format the output for the client
         formatted = []
         for r in raw_reports:
@@ -359,10 +367,9 @@ def list_reports(
             
             # Fetch vendor details
             vendor_name = "Unassigned"
-            if r.get("assigned_vendor_id"):
-                v_resp = supabase.table("users").select("name").eq("id", r["assigned_vendor_id"]).limit(1).execute()
-                if v_resp.data:
-                    vendor_name = v_resp.data[0]["name"]
+            v_id = r.get("assigned_vendor_id")
+            if v_id and v_id in vendor_names_by_id:
+                vendor_name = vendor_names_by_id[v_id]
                     
             formatted.append({
                 "id": r["id"],
@@ -399,9 +406,10 @@ def list_reports(
             if title.startswith("[REPORT]"):
                 reports_notifs.append(n)
                 
-        # Group notifications by complaint_no and timestamp to deduplicate
+        # Group/deduplicate and extract unique complaint numbers first
         seen_reports = set()
-        formatted = []
+        deduped_notifs = []
+        complaint_nos = set()
         
         for n in reports_notifs:
             title = n["title"]
@@ -421,27 +429,66 @@ def list_reports(
                 continue
             seen_reports.add(key)
             
-            # Fetch complaint details
-            comp_resp = supabase.table("complaints").select("*").eq("complaint_no", comp_no).limit(1).execute()
-            if not comp_resp.data:
+            deduped_notifs.append({
+                "id": n["id"],
+                "comp_no": comp_no,
+                "reason": reason,
+                "details": details,
+                "created_at": created_at
+            })
+            complaint_nos.add(comp_no)
+            
+        # Fetch all matching complaints in one query
+        complaints_by_no = {}
+        if complaint_nos:
+            comp_resp = supabase.table("complaints").select("*").in_("complaint_no", list(complaint_nos)).execute()
+            for comp in (comp_resp.data or []):
+                complaints_by_no[comp["complaint_no"]] = comp
+                
+        # Collect department IDs and user IDs
+        dept_ids = set()
+        user_ids = set()
+        for comp in complaints_by_no.values():
+            if comp.get("department_id"):
+                dept_ids.add(comp["department_id"])
+            if comp.get("assigned_vendor_id"):
+                user_ids.add(comp["assigned_vendor_id"])
+            if comp.get("created_by"):
+                user_ids.add(comp["created_by"])
+                
+        # Fetch all departments in one query
+        dept_names_by_id = {}
+        if dept_ids:
+            dept_resp = supabase.table("departments").select("id, name").in_("id", list(dept_ids)).execute()
+            for d in (dept_resp.data or []):
+                dept_names_by_id[d["id"]] = d["name"]
+                
+        # Fetch all user names (vendors & creators) in one query
+        user_names_by_id = {}
+        if user_ids:
+            user_resp = supabase.table("users").select("id, name").in_("id", list(user_ids)).execute()
+            for u in (user_resp.data or []):
+                user_names_by_id[u["id"]] = u["name"]
+                
+        # Format reports using pre-fetched details
+        formatted = []
+        for item in deduped_notifs:
+            comp_no = item["comp_no"]
+            comp = complaints_by_no.get(comp_no)
+            if not comp:
                 continue
-            comp = comp_resp.data[0]
+                
+            dept_name = dept_names_by_id.get(comp.get("department_id"), "General")
             
-            # department name
-            dept_resp = supabase.table("departments").select("name").eq("id", comp.get("department_id")).limit(1).execute()
-            dept_name = (dept_resp.data or [{}])[0].get("name") or "General"
-            
-            # vendor name
-            vendor_name = "Unassigned"
             assigned_vendor_id = comp.get("assigned_vendor_id")
-            if assigned_vendor_id:
-                v_resp = supabase.table("users").select("name").eq("id", assigned_vendor_id).limit(1).execute()
-                if v_resp.data:
-                    vendor_name = v_resp.data[0]["name"]
-                    
-            # reporter name
-            creator_resp = supabase.table("users").select("name").eq("id", comp.get("created_by")).limit(1).execute()
-            reporter_name = (creator_resp.data or [{}])[0].get("name") or "Faculty User"
+            vendor_name = "Unassigned"
+            if assigned_vendor_id and assigned_vendor_id in user_names_by_id:
+                vendor_name = user_names_by_id[assigned_vendor_id]
+                
+            reporter_name = "Faculty User"
+            created_by = comp.get("created_by")
+            if created_by and created_by in user_names_by_id:
+                reporter_name = user_names_by_id[created_by]
             
             # Filter for superadmin / admin / vendor role-based visibility in fallback mode
             if role in ("admin", "vendor"):
@@ -453,18 +500,18 @@ def list_reports(
                     continue
             
             formatted.append({
-                "id": n["id"],
+                "id": item["id"],
                 "complaintNo": comp_no,
                 "complaintId": comp.get("id"),
                 "title": comp.get("title"),
-                "reason": reason,
-                "details": details,
+                "reason": item["reason"],
+                "details": item["details"],
                 "reportedBy": reporter_name,
                 "vendorName": vendor_name,
                 "vendorId": assigned_vendor_id,
                 "departmentName": dept_name,
                 "departmentId": comp.get("department_id"),
-                "createdAt": created_at
+                "createdAt": item["created_at"]
             })
             
         return formatted

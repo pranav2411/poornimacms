@@ -102,7 +102,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     async jwt({ token }) {
-      if (token.email) {
+      const now = Date.now();
+      const lastChecked = token.lastChecked as number | undefined;
+      const cacheDuration = 10000; // 10 seconds cache
+
+      if (token.email && (!token.userId || !lastChecked || now - lastChecked > cacheDuration)) {
         const supabase = createAdminClient();
         const { data: dbUser, error } = await supabase
           .from("users")
@@ -115,6 +119,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.role = dbUser.role;
           token.status = dbUser.status;
           token.departmentId = dbUser.department_id;
+          token.lastChecked = now;
         }
       }
       return token;

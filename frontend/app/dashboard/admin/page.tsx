@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { assignVendor, getComplaints, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
 import { useToast } from "@/lib/toast";
+import { formatDateTime } from "@/lib/utils";
 
 const priorityStyles: Record<string, string> = {
   low: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
@@ -215,7 +216,7 @@ export default function AdminDashboardPage() {
                               )}
                               <p className="text-3xs font-medium text-heading">{step.label}</p>
                               <p className="mt-0.5 text-[0.5rem] uppercase tracking-[0.16em] text-muted">
-                                {new Date(step.time).toLocaleDateString()}
+                                {formatDateTime(step.time).split(" ")[0]}
                               </p>
                             </div>
                           );

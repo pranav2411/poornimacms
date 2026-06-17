@@ -11,12 +11,23 @@ export function formatDateTime(dateInput: string | Date | undefined | null): str
     const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     if (isNaN(date.getTime())) return String(dateInput);
 
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = String(date.getFullYear()).slice(-2);
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
 
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const parts = formatter.formatToParts(date);
+    const day = parts.find((p) => p.type === "day")?.value || "";
+    const month = parts.find((p) => p.type === "month")?.value || "";
+    const fullYear = parts.find((p) => p.type === "year")?.value || "";
+    const year = fullYear.slice(-2);
+    const hours = parts.find((p) => p.type === "hour")?.value || "";
+    const minutes = parts.find((p) => p.type === "minute")?.value || "";
 
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   } catch {
