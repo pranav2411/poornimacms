@@ -4,8 +4,10 @@ import { getComplaints } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ComplaintsListClient from "./ComplaintsListClient";
 import RefreshButton from "@/components/RefreshButton";
+import { auth } from "@/auth";
 
 export default async function SuperadminComplaintsPage() {
+  const session = await auth();
   const complaints = await getComplaints();
 
   // Fetch department names to populate the department filter
@@ -21,8 +23,8 @@ export default async function SuperadminComplaintsPage() {
       role="superadmin"
       title="All Complaints"
       subtitle="Every complaint across categories"
-      userName="Chief Admin"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Chief Admin"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
       headerActions={<RefreshButton />}
     >
       <GlassCard className="p-6">

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { assignVendor, getComplaints, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { RefreshCw } from "lucide-react";
 
 export default function AdminComplaintsPage() {
   const { data: session } = useSession();
@@ -20,6 +21,7 @@ export default function AdminComplaintsPage() {
   const [selected, setSelected] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const isSuperadmin = session?.user?.role === "superadmin";
   const adminDeptId = isSuperadmin ? undefined : (session?.user?.departmentId || undefined);
@@ -47,16 +49,19 @@ export default function AdminComplaintsPage() {
     loadData();
   }, [session, loadData]);
 
-  const handleAssign = async (vendor: string) => {
+  const handleAssign = async (vendor: VendorItem) => {
     if (!selected) return;
+    setIsAssigning(true);
     try {
-      const updated = await assignVendor(selected, vendor);
+      const updated = await assignVendor(selected, vendor.name);
       setComplaints((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item))
       );
       setOpen(false);
     } catch {
       setOpen(false);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -75,20 +80,7 @@ export default function AdminComplaintsPage() {
           disabled={isLoading}
           className="flex items-center gap-2 border-border bg-surface text-heading hover:bg-surface/85"
         >
-          <svg
-            className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")}
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
-            />
-          </svg>
+          <RefreshCw className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       }
@@ -154,8 +146,9 @@ export default function AdminComplaintsPage() {
       <AssignVendorModal
         open={open}
         onClose={() => setOpen(false)}
-        vendors={vendors.map((item) => item.name)}
+        vendors={vendors}
         onAssign={handleAssign}
+        isLoading={isAssigning}
       />
     </DashboardShell>
   );

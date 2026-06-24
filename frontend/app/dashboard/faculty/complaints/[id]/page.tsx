@@ -756,13 +756,14 @@ export default function FacultyComplaintDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { data: session } = useSession();
   return (
     <DashboardShell
       role="faculty"
       title="Complaint Detail"
       subtitle="Full trace of the issue"
-      userName="Faculty"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Faculty"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
     >
       <Suspense
         fallback={

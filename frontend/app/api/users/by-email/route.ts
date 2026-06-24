@@ -42,6 +42,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    if (user.role === "super_admin") {
+      user.role = "superadmin";
+    }
+
     return NextResponse.json(user);
   } catch (err) {
     console.error("Unhandled error in GET /api/users/by-email:", err);

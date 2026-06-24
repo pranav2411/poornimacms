@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
+import { RefreshCw } from "lucide-react";
 
 const priorityStyles: Record<string, string> = {
   low: "bg-fixed/15 text-fixed border-fixed/30",
@@ -145,6 +146,7 @@ export default function OpenComplaintsCarousel() {
     reason: "Work was not completed",
     details: "",
   });
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -256,6 +258,7 @@ export default function OpenComplaintsCarousel() {
       return;
     }
 
+    setIsActionLoading(true);
     try {
       const updated = await closeComplaint(closeConfirm.id, closeReason.trim());
       setComplaints((prev) =>
@@ -273,11 +276,14 @@ export default function OpenComplaintsCarousel() {
         description: error instanceof Error ? error.message : "Failed to close complaint",
         variant: "destructive",
       });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const handleRemindVendor = async () => {
     if (!remindVendor) return;
+    setIsActionLoading(true);
     try {
       const updated = await sendReminder(remindVendor.id);
       setComplaints((prev) =>
@@ -294,10 +300,13 @@ export default function OpenComplaintsCarousel() {
         description: error instanceof Error ? error.message : "Failed to send reminder",
         variant: "destructive",
       });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const handleVerifySolution = async (complaint: Complaint) => {
+    setIsActionLoading(true);
     try {
       const updated = await verifySolution(complaint.id);
       setComplaints((prev) =>
@@ -313,6 +322,8 @@ export default function OpenComplaintsCarousel() {
         description: error instanceof Error ? error.message : "Failed to verify solution",
         variant: "destructive",
       });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -320,6 +331,7 @@ export default function OpenComplaintsCarousel() {
     event.preventDefault();
     if (!reportComplaint) return;
 
+    setIsActionLoading(true);
     try {
       await reportIssue(reportComplaint.id, reportForm.reason, reportForm.details);
       addToast({
@@ -334,8 +346,10 @@ export default function OpenComplaintsCarousel() {
         description: error instanceof Error ? error.message : "Failed to submit report",
         variant: "destructive",
       });
+    } finally {
+      setIsActionLoading(false);
     }
-  }
+  };
 
   const transition = shouldReduceMotion
     ? { duration: 0 }
@@ -649,23 +663,12 @@ export default function OpenComplaintsCarousel() {
                         size="sm"
                         className="inline-flex items-center gap-1.5 border-border bg-surface text-heading hover:bg-surface/80 text-xs"
                       >
-                        <svg
+                        <RefreshCw
                           className={cn(
                             "h-3.5 w-3.5 text-heading",
                             refreshingIds.has(complaint.id) && "animate-spin"
                           )}
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
-                          />
-                        </svg>
+                        />
                         Refresh
                       </Button>
                     </div>
@@ -941,23 +944,12 @@ export default function OpenComplaintsCarousel() {
                               size="sm"
                               className="inline-flex items-center gap-1.5 border-border bg-surface text-heading hover:bg-surface/80 text-xs"
                             >
-                              <svg
+                              <RefreshCw
                                 className={cn(
                                   "h-3.5 w-3.5 text-heading",
                                   refreshingIds.has(complaint.id) && "animate-spin"
                                 )}
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
-                                />
-                              </svg>
+                              />
                               Refresh
                             </Button>
                           </div>
@@ -1033,6 +1025,7 @@ export default function OpenComplaintsCarousel() {
                     Reason for closing
                     <textarea
                       value={closeReason}
+                      disabled={isActionLoading}
                       onChange={(e) => setCloseReason(e.target.value)}
                       rows={4}
                       placeholder="Please provide the reason for closing this complaint..."
@@ -1047,6 +1040,7 @@ export default function OpenComplaintsCarousel() {
                       setCloseConfirm(null);
                       setCloseReason("");
                     }}
+                    disabled={isActionLoading}
                     size="sm"
                     className="border-border bg-surface text-heading hover:bg-transparent hover:text-heading"
                   >
@@ -1055,11 +1049,11 @@ export default function OpenComplaintsCarousel() {
                   <Button
                     type="button"
                     onClick={handleCloseComplaint}
-                    disabled={!closeReason.trim()}
+                    disabled={isActionLoading || !closeReason.trim()}
                     size="sm"
                     className="border-green-500 bg-green-500 text-surface disabled:cursor-not-allowed disabled:opacity-50 hover:bg-transparent hover:text-green-500 disabled:hover:bg-green-500 disabled:hover:text-surface"
                   >
-                    Close Complaint
+                    {isActionLoading ? "Closing..." : "Close Complaint"}
                   </Button>
                 </div>
               </GlassCard>
@@ -1112,6 +1106,7 @@ export default function OpenComplaintsCarousel() {
                   <Button
                     type="button"
                     onClick={() => setRemindVendor(null)}
+                    disabled={isActionLoading}
                     size="sm"
                     className="border-border bg-surface text-heading hover:bg-transparent hover:text-heading"
                   >
@@ -1120,10 +1115,11 @@ export default function OpenComplaintsCarousel() {
                   <Button
                     type="button"
                     onClick={handleRemindVendor}
+                    disabled={isActionLoading}
                     size="sm"
                     className="border-blue-500 bg-blue-500 text-surface hover:bg-transparent hover:text-blue-500"
                   >
-                    Send reminder
+                    {isActionLoading ? "Sending..." : "Send reminder"}
                   </Button>
                 </div>
               </GlassCard>
@@ -1171,6 +1167,7 @@ export default function OpenComplaintsCarousel() {
                     Reason
                     <select
                       value={reportForm.reason}
+                      disabled={isActionLoading}
                       onChange={(event) =>
                         setReportForm((prev) => ({
                           ...prev,
@@ -1189,6 +1186,7 @@ export default function OpenComplaintsCarousel() {
                     Remarks
                     <textarea
                       value={reportForm.details}
+                      disabled={isActionLoading}
                       onChange={(event) =>
                         setReportForm((prev) => ({
                           ...prev,
@@ -1204,6 +1202,7 @@ export default function OpenComplaintsCarousel() {
                     <Button
                       type="button"
                       onClick={() => setReportComplaint(null)}
+                      disabled={isActionLoading}
                       size="sm"
                       className="border-border bg-surface text-heading hover:bg-transparent hover:text-heading"
                     >
@@ -1211,10 +1210,11 @@ export default function OpenComplaintsCarousel() {
                     </Button>
                     <Button
                       type="submit"
+                      disabled={isActionLoading}
                       size="sm"
                       className="border-amber-500 bg-amber-500 text-surface hover:bg-transparent hover:text-amber-500"
                     >
-                      Send report
+                      {isActionLoading ? "Reporting..." : "Send report"}
                     </Button>
                   </div>
                 </form>

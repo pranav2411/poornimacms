@@ -81,6 +81,7 @@ async function syncUserProfile(user: {
           profile = await updateUserById(preCreatedUser.id, {
             firebaseUid: user.uid,
             name: preCreatedUser.name || googleProfile.name,
+            avatarUrl: preCreatedUser.avatarUrl || googleProfile.avatarUrl,
           });
         } catch (emailErr) {
           if (emailErr instanceof Error && emailErr.message === "User not found") {
@@ -89,6 +90,7 @@ async function syncUserProfile(user: {
               firebaseUid: user.uid,
               name: googleProfile.name,
               email: googleProfile.email,
+              avatarUrl: googleProfile.avatarUrl,
               role: "faculty",
               isVerified: true,
               isActive: true,
@@ -103,6 +105,7 @@ async function syncUserProfile(user: {
           firebaseUid: user.uid,
           name: googleProfile.name,
           email: googleProfile.email,
+          avatarUrl: googleProfile.avatarUrl,
           role: "faculty",
           isVerified: true,
           isActive: true,
@@ -116,6 +119,7 @@ async function syncUserProfile(user: {
   const needsRefresh =
     profile.name !== googleProfile.name ||
     profile.email !== googleProfile.email ||
+    profile.avatarUrl !== googleProfile.avatarUrl ||
     !profile.firebaseUid;
 
   if (needsRefresh) {
@@ -123,12 +127,14 @@ async function syncUserProfile(user: {
       profile = await updateUserByFirebaseUid(profile.firebaseUid, {
         name: googleProfile.name,
         email: googleProfile.email,
+        avatarUrl: googleProfile.avatarUrl,
       });
     } else {
       profile = await updateUserById(profile.id, {
         firebaseUid: user.uid,
         name: googleProfile.name,
         email: googleProfile.email,
+        avatarUrl: googleProfile.avatarUrl,
       });
     }
   }

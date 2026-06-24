@@ -9,10 +9,12 @@ export default function CloseComplaintModal({
   open,
   onClose,
   onCloseSubmit,
+  isLoading = false,
 }: {
   open: boolean;
   onClose: () => void;
   onCloseSubmit: (reason: string) => void;
+  isLoading?: boolean;
 }) {
   const [reason, setReason] = useState("");
 
@@ -51,6 +53,7 @@ export default function CloseComplaintModal({
                 <Button
                   type="button"
                   onClick={onClose}
+                  disabled={isLoading}
                   size="icon-sm"
                   aria-label="Close"
                   className="border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500"
@@ -75,6 +78,7 @@ export default function CloseComplaintModal({
                   required
                   placeholder="Reason for closing..."
                   value={reason}
+                  disabled={isLoading}
                   onChange={(e) => setReason(e.target.value)}
                   className="w-full rounded-2xl border border-border bg-surface/50 p-4 text-sm text-heading outline-none focus:border-primary focus:bg-surface min-h-[100px] resize-y transition-all duration-200"
                 />
@@ -83,15 +87,17 @@ export default function CloseComplaintModal({
                     type="button"
                     variant="outline"
                     onClick={onClose}
+                    disabled={isLoading}
                     className="rounded-full border border-border hover:bg-surface"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-full border border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500"
+                    disabled={isLoading || !reason.trim()}
+                    className="rounded-full border border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500 disabled:opacity-50"
                   >
-                    Close Complaint
+                    {isLoading ? "Closing..." : "Close Complaint"}
                   </Button>
                 </div>
               </form>

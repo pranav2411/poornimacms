@@ -44,7 +44,7 @@ export async function PATCH(
       };
     } else {
       updatePayload = {
-        role: targetRole,
+        role: targetRole === "superadmin" ? "super_admin" : targetRole,
         status: "verified",
         is_verified: true, // Legacy compatibility
       };

@@ -14,7 +14,7 @@ export default async function FacultySosHistoryPage() {
     redirect("/login");
   }
 
-  if (session.user.role !== "faculty") {
+  if (session.user.role !== "faculty" && session.user.role !== "superadmin") {
     redirect("/unauthorized");
   }
 

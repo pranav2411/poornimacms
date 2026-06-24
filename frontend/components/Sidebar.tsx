@@ -527,11 +527,7 @@ export default function Sidebar({
   }, []);
 
   let items = [...navConfig[role]];
-  if (role === "superadmin") {
-    if (!hasActiveSos) {
-      items = items.filter((item) => item.label !== "SOS History");
-    }
-  } else {
+  if (role !== "superadmin") {
     if (hasActiveSos) {
       if (!items.some((item) => item.label === "Active SOS")) {
         items.push({

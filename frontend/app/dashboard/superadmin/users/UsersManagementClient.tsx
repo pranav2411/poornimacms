@@ -111,6 +111,7 @@ export default function UsersManagementClient({
 
   const handleVerify = async (userId: string) => {
     const previousUsers = [...users];
+    setUpdatingUserId(userId);
 
     // Optimistically verify user to 'faculty'
     setUsers((prev) =>
@@ -145,11 +146,14 @@ export default function UsersManagementClient({
         description: "Operation failed. Rolled back state.",
         variant: "destructive",
       });
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
   const handleDeny = async (userId: string) => {
     const previousUsers = [...users];
+    setUpdatingUserId(userId);
 
     // Optimistically deny user
     setUsers((prev) =>
@@ -181,6 +185,8 @@ export default function UsersManagementClient({
         description: "Operation failed. Rolled back state.",
         variant: "destructive",
       });
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
@@ -262,6 +268,7 @@ export default function UsersManagementClient({
     }
 
     const previousUsers = [...users];
+    setUpdatingUserId(userId);
     setUsers((prev) => prev.filter((u) => u.id !== userId));
 
     try {
@@ -286,6 +293,8 @@ export default function UsersManagementClient({
         description: err instanceof Error ? err.message : "Could not delete user.",
         variant: "destructive",
       });
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
@@ -426,6 +435,7 @@ export default function UsersManagementClient({
                           <Button
                             size="sm"
                             onClick={() => handleVerify(user.id)}
+                            disabled={updatingUserId !== null}
                             className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
                           >
                             Verify
@@ -433,6 +443,7 @@ export default function UsersManagementClient({
                           <Button
                             size="sm"
                             onClick={() => handleDeny(user.id)}
+                            disabled={updatingUserId !== null}
                             className="rounded-full border border-rose-600 bg-rose-600 text-white hover:bg-transparent hover:text-rose-600 text-xs py-1 px-3 transition-colors"
                           >
                             Deny
@@ -606,6 +617,7 @@ export default function UsersManagementClient({
                               <Button
                                 size="sm"
                                 onClick={() => handleVerify(user.id)}
+                                disabled={updatingUserId !== null}
                                 className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
                               >
                                 Verify
@@ -616,6 +628,7 @@ export default function UsersManagementClient({
                                 <Button
                                   size="sm"
                                   onClick={() => handleVerify(user.id)}
+                                  disabled={updatingUserId !== null}
                                   className="rounded-full border border-emerald-600 bg-emerald-600 text-white hover:bg-transparent hover:text-emerald-600 text-xs py-1 px-3 transition-colors"
                                 >
                                   Verify
@@ -623,6 +636,7 @@ export default function UsersManagementClient({
                                 <Button
                                   size="sm"
                                   onClick={() => handleDeny(user.id)}
+                                  disabled={updatingUserId !== null}
                                   className="rounded-full border border-rose-600 bg-rose-600 text-white hover:bg-transparent hover:text-rose-600 text-xs py-1 px-3 transition-colors"
                                 >
                                   Deny
@@ -632,7 +646,7 @@ export default function UsersManagementClient({
                             <Button
                               size="sm"
                               variant="destructive"
-                              disabled={user.id === currentUserId}
+                              disabled={user.id === currentUserId || updatingUserId !== null}
                               onClick={() => handleDeleteUser(user.id)}
                               className="rounded-full text-xs py-1 px-3"
                             >

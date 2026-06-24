@@ -22,6 +22,7 @@ export default function AdminComplaintDetailPage({
   const [open, setOpen] = useState(false);
   const [complaint, setComplaint] = useState<Complaint | null>(null);
   const [vendors, setVendors] = useState<VendorItem[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const isSuperadmin = session?.user?.role === "superadmin";
   const adminDeptId = isSuperadmin ? undefined : (session?.user?.departmentId || undefined);
@@ -52,14 +53,17 @@ export default function AdminComplaintDetailPage({
     };
   }, [id, session, adminDeptId]);
 
-  const handleAssign = async (vendor: string) => {
+  const handleAssign = async (vendor: VendorItem) => {
     if (!complaint) return;
+    setIsAssigning(true);
     try {
-      const updated = await assignVendor(complaint.id, vendor);
+      const updated = await assignVendor(complaint.id, vendor.name);
       setComplaint(updated);
       setOpen(false);
     } catch {
       setOpen(false);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -268,8 +272,9 @@ export default function AdminComplaintDetailPage({
       <AssignVendorModal
         open={open}
         onClose={() => setOpen(false)}
-        vendors={vendors.map((item) => item.name)}
+        vendors={vendors}
         onAssign={handleAssign}
+        isLoading={isAssigning}
       />
     </DashboardShell>
   );

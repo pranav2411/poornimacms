@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, use } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
@@ -34,6 +35,7 @@ function SuperadminComplaintDetailContent({
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,14 +66,17 @@ function SuperadminComplaintDetailContent({
     };
   }, [id, shouldAutoAssign]);
 
-  const handleAssign = async (vendor: string) => {
+  const handleAssign = async (vendor: VendorItem) => {
     if (!complaint) return;
+    setIsAssigning(true);
     try {
-      const updated = await assignVendor(complaint.id, vendor);
+      const updated = await assignVendor(complaint.id, vendor.name);
       setComplaint(updated);
       setOpen(false);
     } catch {
       setOpen(false);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -356,14 +361,16 @@ function SuperadminComplaintDetailContent({
       <AssignVendorModal
         open={open}
         onClose={() => setOpen(false)}
-        vendors={vendors.map((item) => item.name)}
+        vendors={vendors}
         onAssign={handleAssign}
+        isLoading={isAssigning}
       />
 
       <CloseComplaintModal
         open={closeModalOpen}
         onClose={() => setCloseModalOpen(false)}
         onCloseSubmit={handleCloseWithReason}
+        isLoading={closing}
       />
     </div>
   );
@@ -374,13 +381,14 @@ export default function SuperadminComplaintDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { data: session } = useSession();
   return (
     <DashboardShell
       role="superadmin"
       title="Complaint Detail"
       subtitle="System-wide timeline and vendor dispatch"
-      userName="Chief Admin"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Chief Admin"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
     >
       <Suspense
         fallback={

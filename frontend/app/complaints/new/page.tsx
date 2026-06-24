@@ -325,8 +325,8 @@ export default function NewComplaintPage() {
       role="faculty"
       title="New Complaint"
       subtitle="Tell us what needs attention"
-      userName="Dr. Aditi Sharma"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Dr. Aditi Sharma"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <GlassCard className="p-8">
@@ -365,7 +365,11 @@ export default function NewComplaintPage() {
                     disabled={!room.trim()}
                     className="h-12 min-w-[220px] flex items-center justify-center gap-2"
                   >
-                    <span>My issue is different, continue</span>
+                    <span>
+                      {roomComplaints.length > 0
+                        ? "My issue is different, continue"
+                        : "Continue"}
+                    </span>
                     <ArrowRight className="size-4" />
                   </GlassButton>
                 </div>

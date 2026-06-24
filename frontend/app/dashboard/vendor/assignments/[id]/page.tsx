@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import StatusPill from "@/components/StatusPill";
@@ -17,6 +18,7 @@ export default function VendorAssignmentDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
   const [complaint, setComplaint] = useState<Complaint | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -54,8 +56,8 @@ export default function VendorAssignmentDetailPage({
       role="vendor"
       title="Assignment details"
       subtitle="Mark work as fixed and upload proof"
-      userName="Vendor"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Vendor"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
     >
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <GlassCard className="p-6">

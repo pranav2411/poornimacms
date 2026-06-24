@@ -5,8 +5,10 @@ import { getComplaints } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import UnassignedComplaintsClient from "./UnassignedComplaintsClient";
 import RefreshButton from "@/components/RefreshButton";
+import { auth } from "@/auth";
 
 export default async function SuperadminDashboardPage() {
+  const session = await auth();
   const complaints = await getComplaints();
   const openCount = complaints.filter((item) => item.status !== "Closed").length;
   
@@ -58,8 +60,8 @@ export default async function SuperadminDashboardPage() {
       role="superadmin"
       title="Superadmin Dashboard"
       subtitle="Institution-wide control center"
-      userName="Chief Admin"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Chief Admin"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
       headerActions={<RefreshButton />}
     >
       <div className="grid gap-8">

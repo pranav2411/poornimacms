@@ -14,7 +14,7 @@ export default async function VendorSosHistoryPage() {
     redirect("/login");
   }
 
-  if (session.user.role !== "vendor") {
+  if (session.user.role !== "vendor" && session.user.role !== "superadmin") {
     redirect("/unauthorized");
   }
 

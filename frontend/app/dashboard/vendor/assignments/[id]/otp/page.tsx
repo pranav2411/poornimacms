@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
 import GlassCard from "@/components/GlassCard";
 import OTPInput from "@/components/OTPInput";
@@ -11,6 +12,7 @@ import { useToast } from "@/lib/toast";
 
 export default function VendorOtpPage() {
   const { addToast } = useToast();
+  const { data: session } = useSession();
   const params = useParams<{ id: string }>();
   const [otp, setOtp] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,8 +44,8 @@ export default function VendorOtpPage() {
       role="vendor"
       title="OTP Verification"
       subtitle="Confirm the faculty approval"
-      userName="Ravi Kumar"
-      avatarUrl="/user-no-av.png"
+      userName={session?.user?.name || "Vendor"}
+      avatarUrl={session?.user?.image || "/user-no-av.png"}
     >
       <div className="mx-auto max-w-xl">
         <GlassCard className="p-8 text-center">

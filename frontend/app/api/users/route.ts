@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       .from("users")
       .insert({
         email: cleanedEmail,
-        role: role,
+        role: role === "superadmin" ? "super_admin" : role,
         name: defaultName,
         status: "verified",
         is_verified: true, // Legacy compatibility

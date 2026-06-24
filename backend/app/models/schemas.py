@@ -101,6 +101,8 @@ class VendorItem(BaseModel):
     name: str
     email: Optional[str] = None
     departmentId: Optional[str] = None
+    avgResolutionTime: Optional[str] = None
+    activeComplaints: int = 0
 
 
 class AddVendorRequest(BaseModel):

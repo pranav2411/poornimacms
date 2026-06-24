@@ -49,6 +49,8 @@ export type VendorItem = {
   name: string;
   email?: string;
   departmentId?: string | null;
+  activeComplaints?: number;
+  avgResolutionTime?: string | null;
 };
 
 export type NotificationItem = {

@@ -32,7 +32,7 @@ export async function GET() {
 
     return NextResponse.json({
       status: dbUser.status,
-      role: dbUser.role,
+      role: dbUser.role === "super_admin" ? "superadmin" : dbUser.role,
     });
   } catch (err) {
     console.error("Unhandled error in GET /api/users/check-status:", err);

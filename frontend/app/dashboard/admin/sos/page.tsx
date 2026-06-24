@@ -14,7 +14,7 @@ export default async function AdminSosHistoryPage() {
     redirect("/login");
   }
 
-  if (session.user.role !== "admin") {
+  if (session.user.role !== "admin" && session.user.role !== "superadmin") {
     redirect("/unauthorized");
   }
 

@@ -76,7 +76,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const { error: insertError } = await supabase.from("users").insert({
             email: user.email,
             name: user.name || "",
-            image: user.image || "",
+            avatar_url: user.image || "",
             role: null,
             status: "pending",
             is_verified: false,
@@ -126,13 +126,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const supabase = createAdminClient();
         const { data: dbUser, error } = await supabase
           .from("users")
-          .select("id, role, status, department_id")
+          .select("id, name, role, status, department_id, avatar_url")
           .eq("email", token.email)
           .single();
 
         if (!error && dbUser) {
           token.userId = dbUser.id;
-          token.role = dbUser.role;
+          token.name = dbUser.name;
+          token.picture = dbUser.avatar_url;
+          token.role = dbUser.role === "super_admin" ? "superadmin" : dbUser.role;
           token.status = dbUser.status;
           token.departmentId = dbUser.department_id;
           token.lastChecked = now;
@@ -147,6 +149,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as any;
         session.user.status = token.status as any;
         session.user.departmentId = token.departmentId as string;
+        if (token.name) session.user.name = token.name as string;
+        if (token.picture) session.user.image = token.picture as string;
       }
       return session;
     },

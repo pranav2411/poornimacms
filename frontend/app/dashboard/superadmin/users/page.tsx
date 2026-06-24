@@ -30,6 +30,11 @@ export default async function SuperadminUsersPage() {
     console.error("Error fetching users in Superadmin panel:", error);
   }
 
+  const mappedUsers = (users || []).map((u) => ({
+    ...u,
+    role: u.role === "super_admin" ? "superadmin" : u.role,
+  }));
+
   return (
     <DashboardShell
       role="superadmin"
@@ -39,7 +44,7 @@ export default async function SuperadminUsersPage() {
       avatarUrl={session.user.image || "/user-no-av.png"}
     >
       <UsersManagementClient
-        initialUsers={users || []}
+        initialUsers={mappedUsers}
         currentUserId={session.user.id}
       />
     </DashboardShell>

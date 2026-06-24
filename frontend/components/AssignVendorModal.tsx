@@ -4,17 +4,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { VendorItem } from "@/lib/types";
 
 export default function AssignVendorModal({
   open,
   onClose,
   vendors,
   onAssign,
+  isLoading = false,
 }: {
   open: boolean;
   onClose: () => void;
-  vendors: string[];
-  onAssign: (vendor: string) => void;
+  vendors: VendorItem[];
+  onAssign: (vendor: VendorItem) => void;
+  isLoading?: boolean;
 }) {
   return (
     <AnimatePresence>
@@ -44,6 +47,7 @@ export default function AssignVendorModal({
                 <Button
                   type="button"
                   onClick={onClose}
+                  disabled={isLoading}
                   size="icon-sm"
                   aria-label="Close"
                   className="border-red-500 bg-red-500 text-white hover:bg-transparent hover:text-red-500"
@@ -63,21 +67,31 @@ export default function AssignVendorModal({
                   </svg>
                 </Button>
               </div>
-              <div className="mt-4 grid gap-3">
+              <div className="mt-4 grid gap-3 max-h-96 overflow-y-auto pr-1">
                 {vendors.map((vendor) => (
                   <Button
-                    key={vendor}
+                    key={vendor.id}
                     type="button"
                     onClick={() => onAssign(vendor)}
-                    size="lg"
+                    disabled={isLoading}
                     className={cn(
-                      "justify-start border-border bg-surface text-heading hover:bg-transparent hover:text-heading",
-                      "hover:border-accent/60"
+                      "flex flex-col items-start justify-center h-auto py-3 px-4 border border-border bg-surface text-heading hover:bg-transparent hover:text-heading",
+                      "hover:border-accent/60 w-full transition-all duration-200"
                     )}
                   >
-                    {vendor}
+                    <div className="flex w-full justify-between items-center gap-4">
+                      <span className="font-semibold text-heading text-sm">{vendor.name}</span>
+                      <span className="text-xs text-muted truncate">{vendor.email || ""}</span>
+                    </div>
+                    <div className="flex w-full justify-between items-center mt-2 text-xs text-muted/80 pt-1.5 border-t border-border/20">
+                      <span>Active complaints: <strong className="text-accent">{vendor.activeComplaints ?? 0}</strong></span>
+                      <span>Avg resolution: <strong className="text-heading font-medium">{vendor.avgResolutionTime || "N/A"}</strong></span>
+                    </div>
                   </Button>
                 ))}
+                {vendors.length === 0 && (
+                  <p className="text-center text-sm text-muted py-4">No vendors available.</p>
+                )}
               </div>
             </GlassCard>
           </motion.div>

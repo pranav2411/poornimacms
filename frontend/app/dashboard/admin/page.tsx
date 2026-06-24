@@ -12,6 +12,7 @@ import { assignVendor, getComplaints, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
 import { useToast } from "@/lib/toast";
 import { cn, formatDateTime } from "@/lib/utils";
+import { RefreshCw } from "lucide-react";
 
 const priorityStyles: Record<string, string> = {
   low: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
@@ -22,12 +23,12 @@ const priorityStyles: Record<string, string> = {
 export default function AdminDashboardPage() {
   const { data: session } = useSession();
   const { addToast } = useToast();
-
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [vendors, setVendors] = useState<VendorItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const isSuperadmin = session?.user?.role === "superadmin";
   const adminDeptId = isSuperadmin ? undefined : (session?.user?.departmentId || undefined);
@@ -64,16 +65,17 @@ export default function AdminDashboardPage() {
     setOpenModal(true);
   };
 
-  const handleAssignSubmit = async (vendorName: string) => {
+  const handleAssignSubmit = async (vendor: VendorItem) => {
     if (!selectedComplaintId) return;
+    setIsAssigning(true);
     try {
-      const updated = await assignVendor(selectedComplaintId, vendorName);
+      const updated = await assignVendor(selectedComplaintId, vendor.name);
       setComplaints((prev) =>
           prev.map((item) => (item.id === updated.id ? updated : item))
       );
       addToast({
         title: "Vendor Assigned",
-        description: `Successfully assigned ${vendorName} to complaint ${selectedComplaintId}.`,
+        description: `Successfully assigned ${vendor.name} to complaint ${selectedComplaintId}.`,
       });
       setOpenModal(false);
       setSelectedComplaintId(null);
@@ -83,6 +85,8 @@ export default function AdminDashboardPage() {
         description: error instanceof Error ? error.message : "Failed to assign vendor.",
         variant: "destructive",
       });
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -109,20 +113,7 @@ export default function AdminDashboardPage() {
           disabled={isLoading}
           className="flex items-center gap-2 border-border bg-surface text-heading hover:bg-surface/85"
         >
-          <svg
-            className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")}
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
-            />
-          </svg>
+          <RefreshCw className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       }
@@ -337,8 +328,9 @@ export default function AdminDashboardPage() {
           setOpenModal(false);
           setSelectedComplaintId(null);
         }}
-        vendors={vendors.map((item) => item.name)}
+        vendors={vendors}
         onAssign={handleAssignSubmit}
+        isLoading={isAssigning}
       />
     </DashboardShell>
   );
