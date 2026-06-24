@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+import os
+import json
+import base64
+import logging
+import threading
+from typing import Any, Dict, List, Optional
+import firebase_admin
+from firebase_admin import credentials, messaging
+
+from app.db.supabase import get_supabase
+
+logger = logging.getLogger(__name__)
+
+_fcm_initialized = False
+_fcm_lock = threading.Lock()
+
+def init_fcm() -> bool:
+    global _fcm_initialized
+    if _fcm_initialized:
+        return True
+
+    with _fcm_lock:
+        if _fcm_initialized:
+            return True
+
+        service_account_info: Optional[Dict[str, Any]] = None
+
+        # 1. Try to load from env variable FIREBASE_SERVICE_ACCOUNT_JSON
+        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            try:
+                # Try to base64 decode it first (common for cloud platforms)
+                try:
+                    decoded = base64.b64decode(sa_json).decode("utf-8")
+                    service_account_info = json.loads(decoded)
+                except Exception:
+                    # Fallback to loading it directly as raw JSON
+                    service_account_info = json.loads(sa_json)
+            except Exception as e:
+                logger.error(f"Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON environment variable: {e}")
+
+        # 2. Try individual environment variables if JSON config isn't available
+        if not service_account_info:
+            private_key = os.getenv("FIREBASE_PRIVATE_KEY")
+            client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
+            project_id = os.getenv("FIREBASE_PROJECT_ID")
+
+            if private_key and client_email and project_id:
+                # Unescape newline characters that commonly happen in env variables
+                private_key_formatted = private_key.replace("\\n", "\n")
+                service_account_info = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key": private_key_formatted,
+                    "client_email": client_email,
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+
+        # 3. Check for default json file if still no config
+        if not service_account_info:
+            default_path = "serviceAccountKey.json"
+            if os.path.exists(default_path):
+                try:
+                    with open(default_path, "r") as f:
+                        service_account_info = json.load(f)
+                except Exception as e:
+                    logger.error(f"Failed to read default serviceAccountKey.json file: {e}")
+
+        if service_account_info:
+            try:
+                cred = credentials.Certificate(service_account_info)
+                firebase_admin.initialize_app(cred)
+                _fcm_initialized = True
+                logger.info("Firebase Admin SDK initialized successfully for FCM.")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to initialize Firebase Admin SDK with credentials: {e}")
+                return False
+
+        logger.warning(
+            "Firebase credentials (FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PRIVATE_KEY/CLIENT_EMAIL/PROJECT_ID) "
+            "are not configured. FCM push notifications will be skipped."
+        )
+        return False
+
+
+def get_tokens_for_users(user_ids: List[str]) -> List[str]:
+    if not user_ids:
+        return []
+    try:
+        supabase = get_supabase()
+        resp = supabase.table("fcm_tokens").select("token").in_("user_id", user_ids).execute()
+        return [item["token"] for item in (resp.data or [])]
+    except Exception as e:
+        logger.error(f"Error querying FCM tokens for user IDs {user_ids}: {e}")
+        return []
+
+
+def get_tokens_for_role(role: str) -> List[str]:
+    try:
+        supabase = get_supabase()
+        users_resp = supabase.table("users").select("id").eq("role", role).execute()
+        user_ids = [u["id"] for u in (users_resp.data or [])]
+        return get_tokens_for_users(user_ids)
+    except Exception as e:
+        logger.error(f"Error querying FCM tokens for role {role}: {e}")
+        return []
+
+
+def get_all_tokens() -> List[str]:
+    try:
+        supabase = get_supabase()
+        resp = supabase.table("fcm_tokens").select("token").execute()
+        return [item["token"] for item in (resp.data or [])]
+    except Exception as e:
+        logger.error(f"Error querying all FCM tokens: {e}")
+        return []
+
+
+def send_fcm_notification(tokens: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None):
+    if not tokens:
+        return
+
+    if not init_fcm():
+        logger.debug("FCM initialization skipped or failed. Push notification not sent.")
+        return
+
+    # Chunk tokens into maximum 500 per batch (FCM multicast API limit)
+    for i in range(0, len(tokens), 500):
+        chunk = tokens[i : i + 500]
+        
+        # Ensure data is dict of strings as required by Firebase SDK
+        data_str: Dict[str, str] = {}
+        if data:
+            for k, v in data.items():
+                data_str[k] = str(v)
+
+        message = messaging.MulticastMessage(
+            notification=messaging.Notification(
+                title=title,
+                body=body,
+            ),
+            data=data_str,
+            tokens=chunk,
+        )
+
+        try:
+            response = messaging.send_multicast(message)
+            logger.info(f"FCM: Sent to {len(chunk)} tokens. Success: {response.success_count}, Failure: {response.failure_count}")
+            
+            # Identify invalid tokens that need to be cleaned up
+            if response.failure_count > 0:
+                invalid_tokens = []
+                for idx, resp in enumerate(response.responses):
+                    if not resp.success:
+                        # Common token expiry/invalid error conditions
+                        if resp.exception and (
+                            resp.exception.code == "invalid-argument" 
+                            or "registration-token-not-registered" in str(resp.exception).lower()
+                            or "not-found" in str(resp.exception).lower()
+                        ):
+                            invalid_tokens.append(chunk[idx])
+
+                if invalid_tokens:
+                    logger.info(f"FCM: Cleaning up {len(invalid_tokens)} invalid/expired tokens from DB.")
+                    supabase = get_supabase()
+                    supabase.table("fcm_tokens").delete().in_("token", invalid_tokens).execute()
+        except Exception as e:
+            logger.error(f"Error sending multicast FCM push notifications: {e}")
+
+
+def send_fcm_notification_async(tokens: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None):
+    """
+    Sends the push notification asynchronously in a background thread to prevent blocking API responses.
+    """
+    if not tokens:
+        return
+    thread = threading.Thread(
+        target=send_fcm_notification,
+        args=(tokens, title, body, data),
+        daemon=True
+    )
+    thread.start()
+
+
+# Helper routines for common workflows
+def notify_users(user_ids: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None):
+    tokens = get_tokens_for_users(user_ids)
+    if tokens:
+        send_fcm_notification_async(tokens, title, body, data)
+
+
+def notify_role(role: str, title: str, body: str, data: Optional[Dict[str, str]] = None):
+    tokens = get_tokens_for_role(role)
+    if tokens:
+        send_fcm_notification_async(tokens, title, body, data)
+
+
+def notify_all(title: str, body: str, data: Optional[Dict[str, str]] = None):
+    tokens = get_all_tokens()
+    if tokens:
+        send_fcm_notification_async(tokens, title, body, data)

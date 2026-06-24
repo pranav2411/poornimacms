@@ -219,3 +219,15 @@ CREATE INDEX idx_reports_complaint ON reports(complaint_id);
 CREATE INDEX idx_reports_vendor ON reports(assigned_vendor_id);
 CREATE INDEX idx_reports_admin ON reports(assigned_admin_id);
 
+
+-- FCM Tokens Table
+CREATE TABLE IF NOT EXISTS fcm_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fcm_tokens_user ON fcm_tokens(user_id);
+

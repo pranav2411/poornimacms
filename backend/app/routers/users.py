@@ -5,7 +5,8 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, status
 
 from app.db.supabase import get_supabase
-from app.models.schemas import UserCreate, UserItem, UserUpdate
+from app.models.schemas import UserCreate, UserItem, UserUpdate, NotifyPendingUserRequest
+from app.core.fcm import notify_role
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -102,7 +103,17 @@ def create_user(payload: UserCreate) -> UserItem:
 	if not response.data:
 		raise HTTPException(status_code=500, detail="Failed to create user")
 
-	return _serialize_user(response.data[0])
+	user_data = response.data[0]
+	if not user_data.get("is_verified"):
+		name_str = user_data.get("name") or payload.email.split("@")[0]
+		notify_role(
+			role="super_admin",
+			title="New Pending User Registration",
+			body=f"User {name_str} ({payload.email}) has registered and is pending verification.",
+			data={"type": "new_user", "email": payload.email}
+		)
+
+	return _serialize_user(user_data)
 
 
 @router.patch("/firebase/{firebase_uid}", response_model=UserItem)
@@ -233,4 +244,16 @@ def delete_user_by_id(user_id: str):
 			detail="Cannot delete user. This user has associated complaints, departments, or other active data in the system."
 		)
 	return
+
+
+@router.post("/notify-pending")
+def notify_pending_user(payload: NotifyPendingUserRequest):
+	name_str = f"User {payload.name}" if payload.name else "A new user"
+	notify_role(
+		role="super_admin",
+		title="New Pending User Registration",
+		body=f"{name_str} ({payload.email}) has registered and is pending verification.",
+		data={"type": "new_user", "email": payload.email}
+	)
+	return {"status": "success"}
 

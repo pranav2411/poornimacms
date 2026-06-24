@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 
 from app.db.supabase import get_supabase
-from app.models.schemas import NotificationItem
+from app.models.schemas import NotificationItem, RegisterFCMTokenRequest
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -121,5 +121,43 @@ def list_notifications(
 def delete_notification(notification_id: str):
     supabase = get_supabase()
     supabase.table("notifications").delete().eq("id", notification_id).execute()
+    return {"status": "success"}
+
+
+@router.post("/register-token")
+def register_fcm_token(payload: RegisterFCMTokenRequest):
+    supabase = get_supabase()
+    # Check if user exists in db
+    user_check = supabase.table("users").select("id").eq("id", payload.userId).limit(1).execute()
+    if not user_check.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    token_clean = payload.token.strip()
+    if not token_clean:
+        raise HTTPException(status_code=400, detail="Token cannot be empty")
+
+    try:
+        # Check if the token already exists for any user
+        existing = supabase.table("fcm_tokens").select("id").eq("token", token_clean).execute()
+
+        if existing.data:
+            # Update user_id and updated_at
+            supabase.table("fcm_tokens").update({
+                "user_id": payload.userId,
+                "updated_at": "now()"
+            }).eq("token", token_clean).execute()
+        else:
+            # Insert new token
+            supabase.table("fcm_tokens").insert({
+                "user_id": payload.userId,
+                "token": token_clean
+            }).execute()
+    except Exception as e:
+        # If the fcm_tokens table doesn't exist, log and notify
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error registering token. Ensure fcm_tokens table is created. Details: {str(e)}"
+        )
+
     return {"status": "success"}
 

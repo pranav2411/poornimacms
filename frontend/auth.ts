@@ -87,6 +87,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             console.error("Failed to insert new user in signIn callback:", insertError);
             return false;
           }
+
+          // Notify backend of new pending user so push notifications are dispatched to superadmins
+          try {
+            const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+            fetch(`${apiBase}/users/notify-pending`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: user.email,
+                name: user.name || "",
+              }),
+            }).catch((err) => console.error("Failed to post notify-pending asynchronously:", err));
+          } catch (e) {
+            console.error("Failed to notify backend of pending user:", e);
+          }
+
           return true;
         }
 

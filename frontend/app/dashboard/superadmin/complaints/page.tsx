@@ -3,6 +3,7 @@ import GlassCard from "@/components/GlassCard";
 import { getComplaints } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ComplaintsListClient from "./ComplaintsListClient";
+import RefreshButton from "@/components/RefreshButton";
 
 export default async function SuperadminComplaintsPage() {
   const complaints = await getComplaints();
@@ -22,6 +23,7 @@ export default async function SuperadminComplaintsPage() {
       subtitle="Every complaint across categories"
       userName="Chief Admin"
       avatarUrl="/user-no-av.png"
+      headerActions={<RefreshButton />}
     >
       <GlassCard className="p-6">
         <ComplaintsListClient

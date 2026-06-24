@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.db.supabase import get_supabase
+from app.core.fcm import notify_users, notify_role
 from app.models.schemas import (
     AssignVendorRequest,
     CloseComplaintRequest,
@@ -607,6 +608,14 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
         "changed_by": system_user_id,
     }).execute()
 
+    # Send push notification to admins
+    notify_role(
+        role="admin",
+        title=f"New Complaint: {complaint_no}",
+        body=f"New complaint registered for {dept['name']}: '{payload.title}'",
+        data={"type": "new_complaint", "complaintNo": complaint_no}
+    )
+
     info = _get_complaint_row(complaint_no)
     return _serialize_complaint(
         info["row"],
@@ -677,6 +686,26 @@ def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
+
+    # Send push notifications
+    # 1. Notify Assigned Vendor (new work assigned)
+    notify_users(
+        user_ids=[vendor_id],
+        title=f"New Work Assigned: {complaint_no}",
+        body=f"You have been assigned to complaint: '{info['row']['title']}'",
+        data={"type": "work_assigned", "complaintNo": complaint_no}
+    )
+
+    # 2. Notify Creator / Faculty (status update)
+    creator_id = info["row"].get("created_by")
+    if creator_id:
+        notify_users(
+            user_ids=[creator_id],
+            title=f"Complaint Assigned: {complaint_no}",
+            body=f"A vendor has been assigned to your complaint: '{info['row']['title']}'",
+            data={"type": "status_update", "status": "vendor_assigned", "complaintNo": complaint_no}
+        )
+
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -721,6 +750,17 @@ def mark_fixed(complaint_no: str, payload: Optional[MarkFixedRequest] = None) ->
     }).execute()
 
     info = _get_complaint_row(complaint_no)
+
+    # Notify Creator / Faculty (status update)
+    creator_id = info["row"].get("created_by")
+    if creator_id:
+        notify_users(
+            user_ids=[creator_id],
+            title=f"Complaint Fixed: {complaint_no}",
+            body=f"Your complaint '{info['row']['title']}' has been marked as fixed. Please verify.",
+            data={"type": "status_update", "status": "done", "complaintNo": complaint_no}
+        )
+
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -756,6 +796,17 @@ def verify_solution(complaint_no: str) -> Complaint:
     }).execute()
 
     info = _get_complaint_row(complaint_no)
+
+    # Notify Creator / Faculty (status update)
+    creator_id = info["row"].get("created_by")
+    if creator_id:
+        notify_users(
+            user_ids=[creator_id],
+            title=f"Complaint Resolved: {complaint_no}",
+            body=f"Your complaint '{info['row']['title']}' has been marked as resolved.",
+            data={"type": "status_update", "status": "resolved", "complaintNo": complaint_no}
+        )
+
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -818,6 +869,17 @@ def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Compla
     }).execute()
 
     info = _get_complaint_row(complaint_no)
+
+    # Notify Creator / Faculty (status update)
+    creator_id = info["row"].get("created_by")
+    if creator_id:
+        notify_users(
+            user_ids=[creator_id],
+            title=f"Complaint Cancelled: {complaint_no}",
+            body=f"Your complaint '{info['row']['title']}' has been cancelled. Reason: {payload.reason}",
+            data={"type": "status_update", "status": "cancelled", "complaintNo": complaint_no}
+        )
+
     return _serialize_complaint(
         info["row"],
         info["history"],

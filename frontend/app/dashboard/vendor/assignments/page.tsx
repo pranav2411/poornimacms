@@ -5,6 +5,7 @@ import StatusPill from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { getComplaints } from "@/lib/api";
 import { auth } from "@/auth";
+import RefreshButton from "@/components/RefreshButton";
 
 export default async function VendorAssignmentsPage() {
   const session = await auth();
@@ -18,6 +19,7 @@ export default async function VendorAssignmentsPage() {
       subtitle="Track fixes and OTP verification"
       userName={session?.user?.name || "Vendor"}
       avatarUrl={session?.user?.image || "/user-no-av.png"}
+      headerActions={<RefreshButton />}
     >
       <GlassCard className="p-6">
         <div className="flex items-center justify-between">

@@ -20,6 +20,7 @@ export default function DashboardShell({
   subtitle,
   userName,
   avatarUrl,
+  headerActions,
   children,
 }: {
   role: UserRole;
@@ -27,6 +28,7 @@ export default function DashboardShell({
   subtitle?: string;
   userName: string;
   avatarUrl: string;
+  headerActions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -217,6 +219,7 @@ export default function DashboardShell({
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+              {headerActions}
               <NotificationBell />
               <div className="relative" ref={menuRef}>
                 <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardShell from "@/components/DashboardShell";
@@ -17,7 +17,7 @@ import {
 } from "@/lib/api";
 import type { Complaint } from "@/lib/types";
 import { useToast } from "@/lib/toast";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 export default function FacultyComplaintsPage() {
   const router = useRouter();
@@ -42,36 +42,26 @@ export default function FacultyComplaintsPage() {
     ? complaints.find((item) => item.id === openDetailsId) ?? null
     : null;
 
-  useEffect(() => {
+  const handleRefresh = useCallback(async () => {
     if (!session?.user?.id) return;
-    let isMounted = true;
+    try {
+      setIsLoading(true);
+      const data = await getComplaints({ createdBy: session.user.id });
+      setComplaints(data);
+    } catch (error) {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to refresh complaints list",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session?.user?.id, addToast]);
 
-    const loadComplaints = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getComplaints({ createdBy: session.user.id });
-        if (isMounted) {
-          setComplaints(data);
-          setIsLoading(false);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setComplaints([]);
-          setIsLoading(false);
-          addToast({
-            title: "Error",
-            description: error instanceof Error ? error.message : "Failed to load complaints list",
-            variant: "destructive",
-          });
-        }
-      }
-    };
-
-    loadComplaints();
-    return () => {
-      isMounted = false;
-    };
-  }, [session?.user?.id]);
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   // Update countdown timer
   useEffect(() => {
@@ -211,6 +201,31 @@ export default function FacultyComplaintsPage() {
       subtitle="All issues reported by your faculty account"
       userName="Dr. Aditi Sharma"
       avatarUrl="/user-no-av.png"
+      headerActions={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="flex items-center gap-2 border-border bg-surface text-heading hover:bg-surface/85"
+        >
+          <svg
+            className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
+            />
+          </svg>
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      }
     >
       <GlassCard className="p-6">
         <div className="flex items-center justify-between">

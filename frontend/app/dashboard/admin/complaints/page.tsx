@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import DashboardShell from "@/components/DashboardShell";
@@ -10,6 +10,7 @@ import AssignVendorModal from "@/components/AssignVendorModal";
 import { Button } from "@/components/ui/button";
 import { assignVendor, getComplaints, getVendors } from "@/lib/api";
 import type { Complaint, VendorItem } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export default function AdminComplaintsPage() {
   const { data: session } = useSession();
@@ -18,35 +19,33 @@ export default function AdminComplaintsPage() {
   const [vendors, setVendors] = useState<VendorItem[]>([]);
   const [selected, setSelected] = useState("");
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const isSuperadmin = session?.user?.role === "superadmin";
   const adminDeptId = isSuperadmin ? undefined : (session?.user?.departmentId || undefined);
 
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [complaintsData, vendorsData] = await Promise.all([
+        getComplaints({ departmentId: adminDeptId }),
+        getVendors({ departmentId: adminDeptId }),
+      ]);
+      setComplaints(complaintsData);
+      setVendors(vendorsData);
+      setSelected((prev) => prev || complaintsData[0]?.id || "");
+    } catch {
+      setComplaints([]);
+      setVendors([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [adminDeptId]);
+
   useEffect(() => {
     if (session === undefined) return;
-    let isMounted = true;
-
-    const loadData = async () => {
-      try {
-        const [complaintsData, vendorsData] = await Promise.all([
-          getComplaints({ departmentId: adminDeptId }),
-          getVendors({ departmentId: adminDeptId }),
-        ]);
-        if (!isMounted) return;
-        setComplaints(complaintsData);
-        setVendors(vendorsData);
-        setSelected((prev) => prev || complaintsData[0]?.id || "");
-      } catch {
-        if (!isMounted) return;
-        setComplaints([]);
-        setVendors([]);
-      }
-    };
-
     loadData();
-    return () => {
-      isMounted = false;
-    };
-  }, [session, adminDeptId]);
+  }, [session, loadData]);
 
   const handleAssign = async (vendor: string) => {
     if (!selected) return;
@@ -68,6 +67,31 @@ export default function AdminComplaintsPage() {
       subtitle={isSuperadmin ? "Assign vendors and track timelines institution-wide" : "Assign vendors and track timelines"}
       userName={session?.user?.name || "Admin Desk"}
       avatarUrl={session?.user?.image || "/avatar-placeholder.svg"}
+      headerActions={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadData}
+          disabled={isLoading}
+          className="flex items-center gap-2 border-border bg-surface text-heading hover:bg-surface/85"
+        >
+          <svg
+            className={cn("h-4 w-4 text-heading", isLoading && "animate-spin")}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
+            />
+          </svg>
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      }
     >
       <GlassCard className="p-6">
         <div className="flex items-center justify-between">

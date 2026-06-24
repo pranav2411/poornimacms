@@ -13,6 +13,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   closeComplaint,
+  getComplaint,
   getComplaints,
   reportIssue,
   sendReminder,
@@ -32,6 +33,38 @@ export default function OpenComplaintsCarousel() {
   const { addToast } = useToast();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+
+  const handleRefreshComplaint = async (complaintId: string) => {
+    setRefreshingIds((prev) => {
+      const next = new Set(prev);
+      next.add(complaintId);
+      return next;
+    });
+
+    try {
+      const updated = await getComplaint(complaintId);
+      setComplaints((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      addToast({
+        title: "Stats Refreshed",
+        description: `Successfully refreshed stats for complaint ${complaintId}.`,
+      });
+    } catch (error) {
+      addToast({
+        title: "Refresh Failed",
+        description: error instanceof Error ? error.message : "Failed to refresh complaint stats.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(complaintId);
+        return next;
+      });
+    }
+  };
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isNavHovered, setIsNavHovered] = useState(false);
@@ -609,6 +642,32 @@ export default function OpenComplaintsCarousel() {
                           )}
                         </>
                       )}
+                      <Button
+                        type="button"
+                        onClick={() => handleRefreshComplaint(complaint.id)}
+                        disabled={refreshingIds.has(complaint.id)}
+                        size="sm"
+                        className="inline-flex items-center gap-1.5 border-border bg-surface text-heading hover:bg-surface/80 text-xs"
+                      >
+                        <svg
+                          className={cn(
+                            "h-3.5 w-3.5 text-heading",
+                            refreshingIds.has(complaint.id) && "animate-spin"
+                          )}
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
+                          />
+                        </svg>
+                        Refresh
+                      </Button>
                     </div>
                   </div>
                 </article>
@@ -875,6 +934,32 @@ export default function OpenComplaintsCarousel() {
                                 )}
                               </>
                             )}
+                            <Button
+                              type="button"
+                              onClick={() => handleRefreshComplaint(complaint.id)}
+                              disabled={refreshingIds.has(complaint.id)}
+                              size="sm"
+                              className="inline-flex items-center gap-1.5 border-border bg-surface text-heading hover:bg-surface/80 text-xs"
+                            >
+                              <svg
+                                className={cn(
+                                  "h-3.5 w-3.5 text-heading",
+                                  refreshingIds.has(complaint.id) && "animate-spin"
+                                )}
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
+                                />
+                              </svg>
+                              Refresh
+                            </Button>
                           </div>
                         )
                         }

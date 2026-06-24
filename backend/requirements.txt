@@ -5,3 +5,4 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 python-dotenv==1.0.1
 psycopg2-binary==2.9.10
+firebase-admin==6.5.0

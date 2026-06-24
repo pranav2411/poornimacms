@@ -4,6 +4,7 @@ import StatCard from "@/components/StatCard";
 import { getComplaints } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import UnassignedComplaintsClient from "./UnassignedComplaintsClient";
+import RefreshButton from "@/components/RefreshButton";
 
 export default async function SuperadminDashboardPage() {
   const complaints = await getComplaints();
@@ -59,6 +60,7 @@ export default async function SuperadminDashboardPage() {
       subtitle="Institution-wide control center"
       userName="Chief Admin"
       avatarUrl="/user-no-av.png"
+      headerActions={<RefreshButton />}
     >
       <div className="grid gap-8">
         <div className="grid gap-4 md:grid-cols-3">

@@ -164,3 +164,13 @@ class SosAlertHistoryItem(BaseModel):
     closedAt: Optional[str] = None
 
 
+class RegisterFCMTokenRequest(BaseModel):
+    userId: str = Field(..., min_length=1)
+    token: str = Field(..., min_length=1)
+
+
+class NotifyPendingUserRequest(BaseModel):
+    email: str = Field(..., min_length=5)
+    name: str = Field(default="")
+
+

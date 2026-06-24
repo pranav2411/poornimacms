@@ -401,4 +401,10 @@ export const getReports = (options: {
     },
   });
 
+export const registerFCMToken = (userId: string, token: string) =>
+  request<{ status: string }>("/notifications/register-token", {
+    method: "POST",
+    body: { userId, token },
+  });
+
 

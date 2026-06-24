@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.db.supabase import get_supabase
 from app.models.schemas import SosAlertCreate, SosAlertHistoryItem
+from app.core.fcm import notify_all
 
 router = APIRouter(prefix="/sos", tags=["sos"])
 
@@ -50,6 +51,18 @@ def trigger_sos_alert(payload: SosAlertCreate):
 
     if not notif_resp.data:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to trigger app notification")
+
+    # Send push notification to everyone
+    notify_all(
+        title=notif_title,
+        body=notif_message,
+        data={
+            "type": "sos",
+            "alertId": str(alert_id),
+            "location": str(payload.location or "Unknown"),
+            "triggeredBy": str(user_name)
+        }
+    )
 
     return {"status": "success", "alert": sos_resp.data[0]}
 
