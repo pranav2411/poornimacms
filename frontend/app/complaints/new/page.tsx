@@ -353,9 +353,11 @@ export default function NewComplaintPage() {
                     className="mt-2 h-12 w-full rounded-2xl border border-border bg-surface/70 px-4 font-mono text-heading outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
                   />
                 </div>
-                <div className="rounded-2xl border border-pending/40 bg-pending/15 p-4 text-sm text-body">
-                  These complaints are already registered for this room -- please check before submitting
-                </div>
+                {roomComplaints.length > 0 && (
+                  <div className="rounded-2xl border border-pending/40 bg-pending/15 p-4 text-sm text-body">
+                    These complaints are already registered for this room -- please check before submitting
+                  </div>
+                )}
                 <RoomComplaints complaints={roomComplaints} expanded={showRoomPanel} isLoading={isCheckingRoom} />
                 <div className="flex justify-end mt-4">
                   <GlassButton

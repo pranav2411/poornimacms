@@ -512,7 +512,7 @@ export default function FacultyComplaintsPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-lg font-semibold text-heading">
-                    Close complaint
+                    Close Complaint
                   </p>
                   <p className="text-sm text-muted">
                     {closeConfirm.id} - {closeConfirm.title}
@@ -570,10 +570,11 @@ export default function FacultyComplaintsPage() {
                 <Button
                   type="button"
                   onClick={handleCloseComplaint}
+                  disabled={!closeReason.trim()}
                   size="sm"
-                  className="border-green-500 bg-green-500 text-surface hover:bg-transparent hover:text-green-500"
+                  className="border-green-500 bg-green-500 text-surface disabled:cursor-not-allowed disabled:opacity-50 hover:bg-transparent hover:text-green-500 disabled:hover:bg-green-500 disabled:hover:text-surface"
                 >
-                  Close complaint
+                  Close Complaint
                 </Button>
               </div>
             </GlassCard>

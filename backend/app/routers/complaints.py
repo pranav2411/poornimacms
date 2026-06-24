@@ -152,12 +152,31 @@ def _get_complaint_row(complaint_no: str) -> Dict[str, Any]:
 
 def _generate_complaint_no() -> str:
     supabase = get_supabase()
-    for _ in range(5):
-        now = datetime.now(timezone.utc)
-        code = f"CMP-{now.year % 100:02d}{now.month:02d}-{now.day:02d}{now.hour:02d}{now.minute:02d}{now.second:02d}"
+    now = datetime.now(timezone.utc)
+    year = now.year
+    
+    try:
+        # Fetch complaints for this year to determine the next sequential number
+        resp = supabase.table("complaints").select("complaint_no").ilike("complaint_no", f"CMP-{year}-%").execute()
+        existing_nos = []
+        for row in (resp.data or []):
+            parts = row["complaint_no"].split("-")
+            if len(parts) == 3:
+                try:
+                    existing_nos.append(int(parts[2]))
+                except ValueError:
+                    pass
+        next_no = max(existing_nos) + 1 if existing_nos else 1
+    except Exception:
+        next_no = 1
+
+    for _ in range(10):
+        code = f"CMP-{year}-{next_no:06d}"
         existing = supabase.table("complaints").select("id").eq("complaint_no", code).limit(1).execute()
         if not existing.data:
             return code
+        next_no += 1
+        
     raise HTTPException(status_code=500, detail="Unable to allocate complaint number")
 
 
