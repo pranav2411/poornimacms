@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 
 from app.db.supabase import get_supabase
 from app.models.schemas import UserCreate, UserItem, UserUpdate, NotifyPendingUserRequest
 from app.core.fcm import notify_role
+from app.core.security import get_current_user, require_roles
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -54,15 +55,34 @@ def _get_user_by_firebase_uid(firebase_uid: str) -> Dict[str, Any]:
 
 
 @router.post("", response_model=UserItem, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate) -> UserItem:
+def create_user(payload: UserCreate, current_user: dict = Depends(get_current_user)) -> UserItem:
 	supabase = get_supabase()
 
+	is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+	
 	role = payload.role.strip()
 	if role not in ALLOWED_ROLES:
 		raise HTTPException(
 			status_code=status.HTTP_400_BAD_REQUEST,
 			detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
 		)
+
+	# Enforce self-registration checks if not super admin
+	if not is_super:
+		if payload.firebaseUid != current_user.get("firebase_uid"):
+			raise HTTPException(
+				status_code=status.HTTP_403_FORBIDDEN,
+				detail="Cannot register a profile for another user's Firebase UID"
+			)
+		if payload.email.strip().lower() != current_user.get("email", "").strip().lower():
+			raise HTTPException(
+				status_code=status.HTTP_403_FORBIDDEN,
+				detail="Registration email must match authenticated token email"
+			)
+		# Force role to faculty, and require admin verification
+		role = "faculty"
+		payload.isVerified = False
+		payload.isActive = True
 
 	if payload.firebaseUid:
 		existing = (
@@ -88,6 +108,8 @@ def create_user(payload: UserCreate) -> UserItem:
 	if not name:
 		name = payload.email.split("@")[0]
 
+	status_val = "verified" if (is_super and payload.isVerified) else "pending"
+
 	insert_payload = {
 		"firebase_uid": payload.firebaseUid,
 		"name": name,
@@ -95,8 +117,9 @@ def create_user(payload: UserCreate) -> UserItem:
 		"email": payload.email,
 		"role": role,
 		"department_id": payload.departmentId,
-		"is_verified": payload.isVerified,
-		"is_active": payload.isActive,
+		"is_verified": payload.isVerified if is_super else False,
+		"is_active": payload.isActive if is_super else True,
+		"status": status_val
 	}
 
 	response = supabase.table("users").insert(insert_payload).execute()
@@ -117,8 +140,21 @@ def create_user(payload: UserCreate) -> UserItem:
 
 
 @router.patch("/firebase/{firebase_uid}", response_model=UserItem)
-def update_user_by_firebase_uid(firebase_uid: str, payload: UserUpdate) -> UserItem:
+def update_user_by_firebase_uid(
+	firebase_uid: str, 
+	payload: UserUpdate, 
+	current_user: dict = Depends(get_current_user)
+) -> UserItem:
 	supabase = get_supabase()
+
+	is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+	is_self = current_user.get("firebase_uid") == firebase_uid
+
+	if not is_super and not is_self:
+		raise HTTPException(
+			status_code=status.HTTP_403_FORBIDDEN,
+			detail="Cannot update another user's profile"
+		)
 
 	update_payload = payload.model_dump(exclude_unset=True)
 	if not update_payload:
@@ -129,22 +165,29 @@ def update_user_by_firebase_uid(firebase_uid: str, payload: UserUpdate) -> UserI
 		mapped_payload["name"] = update_payload["name"]
 	if "avatarUrl" in update_payload:
 		mapped_payload["avatar_url"] = update_payload["avatarUrl"]
-	if "email" in update_payload:
-		mapped_payload["email"] = update_payload["email"]
-	if "role" in update_payload:
-		role = str(update_payload["role"]).strip()
-		if role not in ALLOWED_ROLES:
-			raise HTTPException(
-				status_code=status.HTTP_400_BAD_REQUEST,
-				detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
-			)
-		mapped_payload["role"] = role
-	if "departmentId" in update_payload:
-		mapped_payload["department_id"] = update_payload["departmentId"]
-	if "isVerified" in update_payload:
-		mapped_payload["is_verified"] = update_payload["isVerified"]
-	if "isActive" in update_payload:
-		mapped_payload["is_active"] = update_payload["isActive"]
+
+	# Restrict sensitive fields to super admin only
+	if is_super:
+		if "email" in update_payload:
+			mapped_payload["email"] = update_payload["email"]
+		if "role" in update_payload:
+			role = str(update_payload["role"]).strip()
+			if role not in ALLOWED_ROLES:
+				raise HTTPException(
+					status_code=status.HTTP_400_BAD_REQUEST,
+					detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
+				)
+			mapped_payload["role"] = role
+		if "departmentId" in update_payload:
+			mapped_payload["department_id"] = update_payload["departmentId"]
+		if "isVerified" in update_payload:
+			mapped_payload["is_verified"] = update_payload["isVerified"]
+			mapped_payload["status"] = "verified" if update_payload["isVerified"] else "pending"
+		if "isActive" in update_payload:
+			mapped_payload["is_active"] = update_payload["isActive"]
+
+	if not mapped_payload:
+		return _serialize_user(_get_user_by_firebase_uid(firebase_uid))
 
 	response = (
 		supabase.table("users")
@@ -160,12 +203,36 @@ def update_user_by_firebase_uid(firebase_uid: str, payload: UserUpdate) -> UserI
 
 
 @router.get("/firebase/{firebase_uid}", response_model=UserItem)
-def get_user_by_firebase_uid(firebase_uid: str) -> UserItem:
+def get_user_by_firebase_uid(
+	firebase_uid: str, 
+	current_user: dict = Depends(get_current_user)
+) -> UserItem:
+	is_authorized = (
+		current_user.get("role") in ("super_admin", "admin") or
+		current_user.get("firebase_uid") == "__system__" or
+		current_user.get("firebase_uid") == firebase_uid
+	)
+	if not is_authorized:
+		raise HTTPException(
+			status_code=status.HTTP_403_FORBIDDEN,
+			detail="Access denied: unauthorized to view this profile"
+		)
 	return _serialize_user(_get_user_by_firebase_uid(firebase_uid))
 
 
 @router.get("/email/{email}", response_model=UserItem)
-def get_user_by_email(email: str) -> UserItem:
+def get_user_by_email(email: str, current_user: dict = Depends(get_current_user)) -> UserItem:
+	is_authorized = (
+		current_user.get("role") in ("super_admin", "admin") or
+		current_user.get("firebase_uid") == "__system__" or
+		current_user.get("email", "").strip().lower() == email.strip().lower()
+	)
+	if not is_authorized:
+		raise HTTPException(
+			status_code=status.HTTP_403_FORBIDDEN,
+			detail="Access denied: unauthorized to view this profile"
+		)
+
 	supabase = get_supabase()
 	response = (
 		supabase.table("users")
@@ -181,36 +248,56 @@ def get_user_by_email(email: str) -> UserItem:
 
 
 @router.patch("/id/{user_id}", response_model=UserItem)
-def update_user_by_id(user_id: str, payload: UserUpdate) -> UserItem:
+def update_user_by_id(
+	user_id: str, 
+	payload: UserUpdate, 
+	current_user: dict = Depends(get_current_user)
+) -> UserItem:
 	supabase = get_supabase()
+
+	is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+	is_self = current_user.get("id") == user_id
+
+	if not is_super and not is_self:
+		raise HTTPException(
+			status_code=status.HTTP_403_FORBIDDEN,
+			detail="Cannot update another user's profile"
+		)
 
 	update_payload = payload.model_dump(exclude_unset=True)
 	if not update_payload:
 		return _serialize_user(_get_user_row(user_id))
 
 	mapped_payload: Dict[str, Any] = {}
-	if "firebaseUid" in update_payload:
-		mapped_payload["firebase_uid"] = update_payload["firebaseUid"]
 	if "name" in update_payload:
 		mapped_payload["name"] = update_payload["name"]
 	if "avatarUrl" in update_payload:
 		mapped_payload["avatar_url"] = update_payload["avatarUrl"]
-	if "email" in update_payload:
-		mapped_payload["email"] = update_payload["email"]
-	if "role" in update_payload:
-		role = str(update_payload["role"]).strip()
-		if role not in ALLOWED_ROLES:
-			raise HTTPException(
-				status_code=status.HTTP_400_BAD_REQUEST,
-				detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
-			)
-		mapped_payload["role"] = role
-	if "departmentId" in update_payload:
-		mapped_payload["department_id"] = update_payload["departmentId"]
-	if "isVerified" in update_payload:
-		mapped_payload["is_verified"] = update_payload["isVerified"]
-	if "isActive" in update_payload:
-		mapped_payload["is_active"] = update_payload["isActive"]
+
+	# Restrict sensitive fields to super admin only
+	if is_super:
+		if "firebaseUid" in update_payload:
+			mapped_payload["firebase_uid"] = update_payload["firebaseUid"]
+		if "email" in update_payload:
+			mapped_payload["email"] = update_payload["email"]
+		if "role" in update_payload:
+			role = str(update_payload["role"]).strip()
+			if role not in ALLOWED_ROLES:
+				raise HTTPException(
+					status_code=status.HTTP_400_BAD_REQUEST,
+					detail=f"role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
+				)
+			mapped_payload["role"] = role
+		if "departmentId" in update_payload:
+			mapped_payload["department_id"] = update_payload["departmentId"]
+		if "isVerified" in update_payload:
+			mapped_payload["is_verified"] = update_payload["isVerified"]
+			mapped_payload["status"] = "verified" if update_payload["isVerified"] else "pending"
+		if "isActive" in update_payload:
+			mapped_payload["is_active"] = update_payload["isActive"]
+
+	if not mapped_payload:
+		return _serialize_user(_get_user_row(user_id))
 
 	response = (
 		supabase.table("users")
@@ -226,7 +313,7 @@ def update_user_by_id(user_id: str, payload: UserUpdate) -> UserItem:
 
 
 @router.delete("/id/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user_by_id(user_id: str):
+def delete_user_by_id(user_id: str, current_user: dict = Depends(require_roles(["super_admin"]))):
 	supabase = get_supabase()
 	# 1. Delete notifications for the user
 	supabase.table("notifications").delete().eq("user_id", user_id).execute()
@@ -247,7 +334,10 @@ def delete_user_by_id(user_id: str):
 
 
 @router.post("/notify-pending")
-def notify_pending_user(payload: NotifyPendingUserRequest):
+def notify_pending_user(
+	payload: NotifyPendingUserRequest, 
+	current_user: dict = Depends(get_current_user)
+):
 	name_str = f"User {payload.name}" if payload.name else "A new user"
 	notify_role(
 		role="super_admin",
@@ -256,4 +346,3 @@ def notify_pending_user(payload: NotifyPendingUserRequest):
 		data={"type": "new_user", "email": payload.email}
 	)
 	return {"status": "success"}
-

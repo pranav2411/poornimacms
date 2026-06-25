@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
-
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from app.db.supabase import get_supabase
 from app.core.fcm import notify_users, notify_role
+from app.core.security import get_current_user, require_roles
 from app.models.schemas import (
     AssignVendorRequest,
     CloseComplaintRequest,
@@ -206,7 +206,33 @@ def list_complaints(
     location: Optional[str] = Query(default=None, alias="location"),
     department_id: Optional[str] = Query(default=None, alias="departmentId"),
     assigned_vendor_id: Optional[str] = Query(default=None, alias="assignedVendorId"),
+    current_user: dict = Depends(get_current_user),
 ) -> List[Complaint]:
+    role = current_user.get("role")
+    user_id = current_user.get("id")
+
+    if current_user.get("firebase_uid") != "__system__":
+        if role == "faculty":
+            created_by = user_id
+            assigned_vendor_id = None
+            assigned_to = None
+            department_id = None
+        elif role == "vendor":
+            assigned_vendor_id = user_id
+            created_by = None
+            assigned_to = None
+        elif role == "admin":
+            department_id = current_user.get("department_id")
+            if not department_id:
+                return []
+        elif role == "super_admin":
+            pass
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized access to complaints"
+            )
+
     supabase = get_supabase()
     query = supabase.table("complaints").select("*").order("updated_at", desc=True)
     if department_id:
@@ -373,7 +399,16 @@ def list_reports(
     role: str = Query(..., alias="role"),
     department_id: Optional[str] = Query(default=None, alias="departmentId"),
     vendor_id: Optional[str] = Query(default=None, alias="vendorId"),
+    current_user: dict = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super:
+        if user_id != current_user.get("id") or role != current_user.get("role"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot query reports for other users"
+            )
+
     import re
     supabase = get_supabase()
     
@@ -578,8 +613,21 @@ def list_reports(
 
 
 @router.get("/{complaint_no}", response_model=Complaint)
-def get_complaint(complaint_no: str) -> Complaint:
+def get_complaint(complaint_no: str, current_user: dict = Depends(get_current_user)) -> Complaint:
     info = _get_complaint_row(complaint_no)
+    row = info["row"]
+    
+    role = current_user.get("role")
+    user_id = current_user.get("id")
+    is_super = role == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        if role == "faculty" and row.get("created_by") != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized to view this complaint")
+        elif role == "vendor" and row.get("assigned_vendor_id") != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized to view this complaint")
+        elif role == "admin" and row.get("department_id") != current_user.get("department_id"):
+            raise HTTPException(status_code=403, detail="Unauthorized to view this complaint")
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -593,7 +641,17 @@ def get_complaint(complaint_no: str) -> Complaint:
 
 
 @router.post("", response_model=Complaint, status_code=status.HTTP_201_CREATED)
-def create_complaint(payload: ComplaintCreate) -> Complaint:
+def create_complaint(
+    payload: ComplaintCreate, 
+    current_user: dict = Depends(require_roles(["faculty"]))
+) -> Complaint:
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super and payload.createdBy != current_user.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot create a complaint on behalf of another user"
+        )
+
     supabase = get_supabase()
     now = _now_iso()
     complaint_no = _generate_complaint_no()
@@ -670,10 +728,22 @@ def create_complaint(payload: ComplaintCreate) -> Complaint:
 
 
 @router.post("/{complaint_no}/assign", response_model=Complaint)
-def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
+def assign_vendor(
+    complaint_no: str, 
+    payload: AssignVendorRequest, 
+    current_user: dict = Depends(require_roles(["admin"]))
+) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super:
+        if info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign vendor to a complaint in another department"
+            )
+
     supabase = get_supabase()
     now = _now_iso()
-    info = _get_complaint_row(complaint_no)
     complaint_id = info["row"]["id"]
 
     system_user_id = _get_system_user_id(supabase)
@@ -752,10 +822,30 @@ def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
 
 
 @router.post("/{complaint_no}/mark-fixed", response_model=Complaint)
-def mark_fixed(complaint_no: str, payload: Optional[MarkFixedRequest] = None) -> Complaint:
+def mark_fixed(
+    complaint_no: str, 
+    payload: Optional[MarkFixedRequest] = None, 
+    current_user: dict = Depends(require_roles(["vendor", "admin"]))
+) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "vendor" and info["row"].get("assigned_vendor_id") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned vendor can mark this complaint as fixed"
+            )
+        elif role == "admin" and info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify a complaint in another department"
+            )
+
     supabase = get_supabase()
     now = _now_iso()
-    info = _get_complaint_row(complaint_no)
     complaint_id = info["row"]["id"]
     system_user_id = _get_system_user_id(supabase)
 
@@ -807,10 +897,34 @@ def mark_fixed(complaint_no: str, payload: Optional[MarkFixedRequest] = None) ->
 
 
 @router.post("/{complaint_no}/verify-solution", response_model=Complaint)
-def verify_solution(complaint_no: str) -> Complaint:
+def verify_solution(
+    complaint_no: str, 
+    current_user: dict = Depends(get_current_user)
+) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "faculty" and info["row"].get("created_by") != user_id:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the complaint creator can verify the solution"
+             )
+        elif role == "admin" and info["row"].get("department_id") != current_user.get("department_id"):
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify a complaint in another department"
+             )
+        elif role not in ("faculty", "admin"):
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized action"
+             )
+
     supabase = get_supabase()
     now = _now_iso()
-    info = _get_complaint_row(complaint_no)
     complaint_id = info["row"]["id"]
     system_user_id = _get_system_user_id(supabase)
 
@@ -853,9 +967,20 @@ def verify_solution(complaint_no: str) -> Complaint:
 
 
 @router.post("/{complaint_no}/notify-vendor", response_model=Complaint)
-def notify_vendor(complaint_no: str) -> Complaint:
-    supabase = get_supabase()
+def notify_vendor(
+    complaint_no: str, 
+    current_user: dict = Depends(require_roles(["admin"]))
+) -> Complaint:
     info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super:
+        if info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot notify vendor for a complaint in another department"
+            )
+
+    supabase = get_supabase()
     assigned_vendor_id = info["row"].get("assigned_vendor_id")
     if not assigned_vendor_id:
         raise HTTPException(status_code=400, detail="No vendor assigned to notify")
@@ -880,9 +1005,34 @@ def notify_vendor(complaint_no: str) -> Complaint:
 
 
 @router.post("/{complaint_no}/close", response_model=Complaint)
-def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Complaint:
-    supabase = get_supabase()
+def close_complaint(
+    complaint_no: str, 
+    payload: CloseComplaintRequest, 
+    current_user: dict = Depends(get_current_user)
+) -> Complaint:
     info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "faculty" and info["row"].get("created_by") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the complaint creator can close/cancel it"
+            )
+        elif role == "admin" and info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify a complaint in another department"
+            )
+        elif role not in ("faculty", "admin"):
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized action"
+             )
+
+    supabase = get_supabase()
     complaint_id = info["row"]["id"]
     now = _now_iso()
     system_user_id = _get_system_user_id(supabase)
@@ -927,10 +1077,33 @@ def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Compla
 
 
 @router.post("/{complaint_no}/remind", response_model=Complaint)
-def send_reminder(complaint_no: str) -> Complaint:
-    supabase = get_supabase()
+def send_reminder(
+    complaint_no: str, 
+    current_user: dict = Depends(get_current_user)
+) -> Complaint:
     info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "faculty" and info["row"].get("created_by") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the complaint creator can send reminders"
+            )
+        elif role == "admin" and info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify a complaint in another department"
+            )
+        elif role not in ("faculty", "admin"):
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized action"
+             )
 
+    supabase = get_supabase()
     assigned_vendor_id = info["row"].get("assigned_vendor_id")
     if assigned_vendor_id:
         notify_users(
@@ -954,9 +1127,29 @@ def send_reminder(complaint_no: str) -> Complaint:
 
 
 @router.post("/{complaint_no}/report", status_code=status.HTTP_201_CREATED)
-def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, str]:
-    supabase = get_supabase()
+def report_issue(
+    complaint_no: str, 
+    payload: ReportIssueRequest, 
+    current_user: dict = Depends(get_current_user)
+) -> Dict[str, str]:
     info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "faculty" and info["row"].get("created_by") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the complaint creator can report an issue with the fix"
+            )
+        elif role not in ("faculty",):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized action"
+            )
+
+    supabase = get_supabase()
     complaint = info["row"]
     complaint_id = complaint["id"]
     
@@ -1033,7 +1226,20 @@ def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, st
 
 
 @router.delete("/{complaint_no}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_complaint(complaint_no: str):
+def delete_complaint(
+    complaint_no: str, 
+    current_user: dict = Depends(require_roles(["admin"]))
+) -> None:
+    info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        if info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete a complaint in another department"
+            )
+
     supabase = get_supabase()
     resp = supabase.table("complaints").select("id").eq("complaint_no", complaint_no).limit(1).execute()
     if not resp.data:
@@ -1047,10 +1253,35 @@ def delete_complaint(complaint_no: str):
 
 
 @router.patch("/{complaint_no}", response_model=Complaint)
-def update_complaint(complaint_no: str, payload: ComplaintUpdate) -> Complaint:
+def update_complaint(
+    complaint_no: str, 
+    payload: ComplaintUpdate, 
+    current_user: dict = Depends(get_current_user)
+) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        role = current_user.get("role")
+        user_id = current_user.get("id")
+        if role == "faculty" and info["row"].get("created_by") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the complaint creator can edit complaint details"
+            )
+        elif role == "admin" and info["row"].get("department_id") != current_user.get("department_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify a complaint in another department"
+            )
+        elif role not in ("faculty", "admin"):
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized action"
+             )
+
     supabase = get_supabase()
     now = _now_iso()
-    info = _get_complaint_row(complaint_no)
     complaint_id = info["row"]["id"]
     
     # Ensure complaint can only be edited while it is open/pending and no vendor is assigned

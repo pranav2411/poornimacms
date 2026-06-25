@@ -4,18 +4,29 @@ import re
 from typing import Any, List
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 
 from app.db.supabase import get_supabase
 from app.models.schemas import SosAlertCreate, SosAlertHistoryItem
 from app.core.fcm import notify_all
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/sos", tags=["sos"])
 
 
 @router.post("/alert", status_code=status.HTTP_201_CREATED)
-def trigger_sos_alert(payload: SosAlertCreate):
+def trigger_sos_alert(
+    payload: SosAlertCreate,
+    current_user: dict = Depends(get_current_user)
+):
     supabase = get_supabase()
+
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super and payload.triggeredBy != current_user.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot trigger SOS alert for another user"
+        )
 
     # 1. Fetch user details to get their name
     user_resp = supabase.table("users").select("id, name").eq("id", payload.triggeredBy).limit(1).execute()
@@ -59,7 +70,9 @@ def trigger_sos_alert(payload: SosAlertCreate):
 
 
 @router.get("/history", response_model=List[SosAlertHistoryItem])
-def get_sos_history() -> List[SosAlertHistoryItem]:
+def get_sos_history(
+    current_user: dict = Depends(get_current_user)
+) -> List[SosAlertHistoryItem]:
     supabase = get_supabase()
     resp = supabase.table("sos_alerts").select("*").order("created_at", desc=True).execute()
     alerts = resp.data or []
@@ -95,7 +108,10 @@ def get_sos_history() -> List[SosAlertHistoryItem]:
 
 
 @router.post("/{alert_id}/resolve")
-def resolve_sos_alert(alert_id: str):
+def resolve_sos_alert(
+    alert_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     supabase = get_supabase()
     
     # 1. Fetch the alert details first to match and delete notifications (both metadata tagged and older title-based ones)
@@ -106,6 +122,17 @@ def resolve_sos_alert(alert_id: str):
             detail="Alert not found or failed to resolve"
         )
     alert_data = alert_resp.data[0]
+
+    # Enforce access checks: only alert creator, admins, or superadmin can resolve
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    is_creator = alert_data.get("triggered_by") == current_user.get("id")
+    is_admin = current_user.get("role") == "admin"
+
+    if not is_super and not is_creator and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the alert creator or an administrator can resolve this alert"
+        )
 
     # 2. Update status of the SOS alert to resolved
     now = datetime.now(timezone.utc).isoformat()
@@ -151,4 +178,3 @@ def resolve_sos_alert(alert_id: str):
         supabase.table("notifications").delete().eq("title", notif_title).execute()
 
     return {"status": "success"}
-

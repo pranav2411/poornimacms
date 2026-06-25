@@ -101,8 +101,14 @@ export default function DashboardShell({
     }
   }, [session]);
 
-  const resolvedUserName = session?.user?.name || storedUser?.name?.trim() || userName;
-  const resolvedAvatarUrl = session?.user?.image || storedUser?.avatarUrl?.trim() || avatarUrl || "/user-no-av.png";
+  const resolvedUserName =
+    session?.user?.name ||
+    storedUser?.name?.trim() ||
+    (userName && !/admin|faculty|vendor|desk|aditi|sharma/i.test(userName) ? userName : "User");
+  const resolvedAvatarUrl =
+    session?.user?.image ||
+    storedUser?.avatarUrl?.trim() ||
+    (avatarUrl && avatarUrl !== "/user-no-av.png" ? avatarUrl : "/user-no-av.png");
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {

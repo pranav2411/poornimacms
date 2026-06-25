@@ -10,6 +10,7 @@ type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
+  token?: string;
 };
 
 const API_BASE_URL =
@@ -29,11 +30,36 @@ const buildUrl = (path: string, query?: RequestOptions["query"]) => {
 };
 
 const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  let token = options.token;
+
+  if (!token && typeof window !== "undefined") {
+    try {
+      const { getFirebaseAuth } = await import("@/lib/firebase");
+      const firebaseAuth = getFirebaseAuth();
+      if (firebaseAuth.currentUser) {
+        token = await firebaseAuth.currentUser.getIdToken();
+      }
+    } catch (e) {
+      console.error("Failed to get Firebase ID token:", e);
+    }
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  } else if (typeof window === "undefined") {
+    const systemKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (systemKey) {
+      headers["x-system-key"] = systemKey;
+    }
+  }
+
   const response = await fetch(buildUrl(path, options.query), {
     method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
   });
@@ -240,7 +266,7 @@ export const getStats = async (options?: {
 
 export const getCategories = () => request<string[]>("/meta/categories");
 
-export const getUserByFirebaseUid = (firebaseUid: string) =>
+export const getUserByFirebaseUid = (firebaseUid: string, token?: string) =>
   request<{
     id: string;
     firebaseUid: string;
@@ -253,18 +279,21 @@ export const getUserByFirebaseUid = (firebaseUid: string) =>
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
-  }>(`/users/firebase/${firebaseUid}`);
+  }>(`/users/firebase/${firebaseUid}`, { token });
 
-export const createUser = (payload: {
-  firebaseUid: string;
-  name: string;
-  avatarUrl?: string | null;
-  email: string;
-  role: string;
-  departmentId?: string | null;
-  isVerified?: boolean;
-  isActive?: boolean;
-}) => request<{
+export const createUser = (
+  payload: {
+    firebaseUid: string;
+    name: string;
+    avatarUrl?: string | null;
+    email: string;
+    role: string;
+    departmentId?: string | null;
+    isVerified?: boolean;
+    isActive?: boolean;
+  },
+  token?: string
+) => request<{
   id: string;
   firebaseUid: string;
   name: string;
@@ -276,7 +305,7 @@ export const createUser = (payload: {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-}>("/users", { method: "POST", body: payload });
+}>("/users", { method: "POST", body: payload, token });
 
 export const updateUserByFirebaseUid = (
   firebaseUid: string,
@@ -288,7 +317,8 @@ export const updateUserByFirebaseUid = (
     departmentId?: string | null;
     isVerified?: boolean;
     isActive?: boolean;
-  }
+  },
+  token?: string
 ) =>
   request<{
     id: string;
@@ -305,6 +335,7 @@ export const updateUserByFirebaseUid = (
   }>(`/users/firebase/${firebaseUid}`, {
     method: "PATCH",
     body: payload,
+    token,
   });
 
 export const triggerSosAlert = (payload: {
@@ -318,7 +349,7 @@ export const triggerSosAlert = (payload: {
     body: payload,
   });
 
-export const getUserByEmail = (email: string) =>
+export const getUserByEmail = (email: string, token?: string) =>
   request<{
     id: string;
     firebaseUid?: string | null;
@@ -331,7 +362,7 @@ export const getUserByEmail = (email: string) =>
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
-  }>(`/users/email/${encodeURIComponent(email)}`);
+  }>(`/users/email/${encodeURIComponent(email)}`, { token });
 
 export const updateUserById = (
   userId: string,
@@ -344,7 +375,8 @@ export const updateUserById = (
     departmentId?: string | null;
     isVerified?: boolean;
     isActive?: boolean;
-  }
+  },
+  token?: string
 ) =>
   request<{
     id: string;
@@ -361,6 +393,7 @@ export const updateUserById = (
   }>(`/users/id/${userId}`, {
     method: "PATCH",
     body: payload,
+    token,
   });
 
 export type SosAlertHistoryItem = {

@@ -72,8 +72,6 @@ export default function FCMHandler() {
         });
 
         if (token) {
-          console.log("FCM: Registration token obtained:", token);
-          
           const cachedToken = localStorage.getItem(`fcm_token_${session.user.id}`);
           if (cachedToken !== token) {
             await registerFCMToken(session.user.id, token);
@@ -86,7 +84,6 @@ export default function FCMHandler() {
         }
 
         unsubscribe = onMessage(messaging, (payload) => {
-          console.log("FCM: Foreground message received:", payload);
           
           const title = payload.notification?.title || "Poornima CMS Alert";
           const body = payload.notification?.body || "";

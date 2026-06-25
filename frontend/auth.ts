@@ -62,7 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       try {
         const { data: dbUser, error } = await supabase
           .from("users")
-          .select("id, status")
+          .select("id, status, avatar_url")
           .eq("email", user.email)
           .single();
 
@@ -108,6 +108,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (dbUser.status === "denied") {
           return false; // block sign-in
+        }
+
+        // Update avatar_url if it has changed or is null
+        if (user.image && dbUser.avatar_url !== user.image) {
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({ avatar_url: user.image })
+            .eq("id", dbUser.id);
+          if (updateError) {
+            console.error("Failed to update user avatar_url in signIn callback:", updateError);
+          }
         }
 
         return true; // allow sign-in

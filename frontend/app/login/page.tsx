@@ -60,29 +60,25 @@ const storeUserProfile = (profile: {
   );
 };
 
-async function syncUserProfile(user: {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-}) {
+async function syncUserProfile(user: any) {
+  const token = await user.getIdToken();
   const googleProfile = getGoogleProfile(user);
   let profile;
 
   try {
-    profile = await getUserByFirebaseUid(user.uid);
+    profile = await getUserByFirebaseUid(user.uid, token);
   } catch (err) {
     if (err instanceof Error && err.message === "User not found") {
       // If not found by firebase uid, check if they were pre-created by email!
       if (googleProfile.email) {
         try {
-          const preCreatedUser = await getUserByEmail(googleProfile.email);
+          const preCreatedUser = await getUserByEmail(googleProfile.email, token);
           // If found by email, link their firebaseUid and set their name from Google
           profile = await updateUserById(preCreatedUser.id, {
             firebaseUid: user.uid,
             name: preCreatedUser.name || googleProfile.name,
             avatarUrl: preCreatedUser.avatarUrl || googleProfile.avatarUrl,
-          });
+          }, token);
         } catch (emailErr) {
           if (emailErr instanceof Error && emailErr.message === "User not found") {
             // Not found by email either, proceed with creating a new user
@@ -94,7 +90,7 @@ async function syncUserProfile(user: {
               role: "faculty",
               isVerified: true,
               isActive: true,
-            });
+            }, token);
           } else {
             throw emailErr;
           }
@@ -109,7 +105,7 @@ async function syncUserProfile(user: {
           role: "faculty",
           isVerified: true,
           isActive: true,
-        });
+        }, token);
       }
     } else {
       throw err;
@@ -128,14 +124,14 @@ async function syncUserProfile(user: {
         name: googleProfile.name,
         email: googleProfile.email,
         avatarUrl: googleProfile.avatarUrl,
-      });
+      }, token);
     } else {
       profile = await updateUserById(profile.id, {
         firebaseUid: user.uid,
         name: googleProfile.name,
         email: googleProfile.email,
         avatarUrl: googleProfile.avatarUrl,
-      });
+      }, token);
     }
   }
 

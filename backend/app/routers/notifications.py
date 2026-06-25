@@ -3,10 +3,11 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends, status
 
 from app.db.supabase import get_supabase
 from app.models.schemas import NotificationItem, RegisterFCMTokenRequest
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -14,10 +15,15 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 @router.get("", response_model=List[NotificationItem])
 def list_notifications(
     user_id: Optional[str] = Query(default=None, alias="userId"),
-    limit: int = Query(default=10, ge=1, le=50)
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user)
 ) -> List[NotificationItem]:
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    if not is_super:
+        # Normal users can only list their own notifications
+        user_id = current_user.get("id")
+
     supabase = get_supabase()
-    # notifications table in new schema has (id, user_id, title, message, is_read, created_at)
     query = supabase.table("notifications").select("id, title, message, created_at")
     if user_id:
         query = query.eq("user_id", user_id)
@@ -118,15 +124,43 @@ def list_notifications(
 
 
 @router.delete("/{notification_id}")
-def delete_notification(notification_id: str):
+def delete_notification(
+    notification_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     supabase = get_supabase()
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+    
+    if not is_super:
+        # Verify ownership of the notification
+        notif_resp = supabase.table("notifications").select("user_id").eq("id", notification_id).limit(1).execute()
+        if notif_resp.data:
+            if notif_resp.data[0].get("user_id") != current_user.get("id"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot delete notifications belonging to other users"
+                )
+
     supabase.table("notifications").delete().eq("id", notification_id).execute()
     return {"status": "success"}
 
 
 @router.post("/register-token")
-def register_fcm_token(payload: RegisterFCMTokenRequest):
+def register_fcm_token(
+    payload: RegisterFCMTokenRequest,
+    current_user: dict = Depends(get_current_user)
+):
     supabase = get_supabase()
+    is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
+
+    if not is_super:
+        # Users can only register tokens for themselves
+        if payload.userId != current_user.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot register FCM token for another user"
+            )
+
     # Check if user exists in db
     user_check = supabase.table("users").select("id").eq("id", payload.userId).limit(1).execute()
     if not user_check.data:
@@ -153,11 +187,9 @@ def register_fcm_token(payload: RegisterFCMTokenRequest):
                 "token": token_clean
             }).execute()
     except Exception as e:
-        # If the fcm_tokens table doesn't exist, log and notify
         raise HTTPException(
             status_code=500,
             detail=f"Database error registering token. Ensure fcm_tokens table is created. Details: {str(e)}"
         )
 
     return {"status": "success"}
-
