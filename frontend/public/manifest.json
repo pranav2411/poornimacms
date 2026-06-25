@@ -1,0 +1,23 @@
+{
+  "name": "Poornima CMS",
+  "short_name": "PCE CMS",
+  "description": "Complaint Management System for Poornima College Of Engineering",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/PCElogo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/PCElogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

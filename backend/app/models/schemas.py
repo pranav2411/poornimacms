@@ -40,6 +40,7 @@ class Complaint(BaseModel):
     updatedAt: str
     workCompleted: Optional[bool] = None
     closeReason: Optional[str] = None
+    lastReminderSent: Optional[str] = None
 
 
 class ComplaintCreate(BaseModel):

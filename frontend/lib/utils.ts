@@ -8,7 +8,16 @@ export function cn(...inputs: ClassValue[]) {
 export function formatDateTime(dateInput: string | Date | undefined | null): string {
   if (!dateInput) return "";
   try {
-    const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+    let date: Date;
+    if (typeof dateInput === "string") {
+      let normalized = dateInput.trim();
+      if (!/[Zz]$|[\+\-]\d{2}:?\d{2}$/.test(normalized)) {
+        normalized = normalized + "Z";
+      }
+      date = new Date(normalized);
+    } else {
+      date = dateInput;
+    }
     if (isNaN(date.getTime())) return String(dateInput);
 
     const formatter = new Intl.DateTimeFormat("en-GB", {

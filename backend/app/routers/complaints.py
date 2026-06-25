@@ -61,10 +61,26 @@ def _serialize_complaint(
     creator_name: Optional[str] = None,
     images: Optional[List[str]] = None,
     fix_images: Optional[List[str]] = None,
+    last_reminder_sent: Optional[str] = "not_fetched",
 ) -> Dict[str, Any]:
     timeline = [
         {"label": h.get("new_status") or h.get("remarks"), "time": h.get("created_at"), "remarks": h.get("remarks")} for h in history
     ]
+
+    if last_reminder_sent == "not_fetched":
+        try:
+            supabase = get_supabase()
+            rem_resp = (
+                supabase.table("notifications")
+                .select("created_at")
+                .eq("title", f"Reminder: {row.get('complaint_no')}")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            last_reminder_sent = rem_resp.data[0]["created_at"] if rem_resp.data else None
+        except Exception:
+            last_reminder_sent = None
 
     return {
         "id": row.get("complaint_no"),
@@ -91,6 +107,7 @@ def _serialize_complaint(
         "updatedAt": row.get("updated_at"),
         "workCompleted": row.get("status") in ("done", "resolved"),
         "closeReason": row.get("cancellation_reason"),
+        "lastReminderSent": last_reminder_sent,
     }
 
 
@@ -310,9 +327,31 @@ def list_complaints(
                 images_by_complaint[c_id] = []
             images_by_complaint[c_id].append(url)
 
+    # Fetch reminder notifications for all active complaint numbers in batch
+    complaint_nos = [item["complaint_no"] for item in data]
+    reminder_titles = [f"Reminder: {no}" for no in complaint_nos]
+    reminders_by_no: Dict[str, str] = {}
+    if reminder_titles:
+        try:
+            reminders_resp = (
+                supabase.table("notifications")
+                .select("title, created_at")
+                .in_("title", reminder_titles)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            for r in (reminders_resp.data or []):
+                title = r["title"]
+                no = title.replace("Reminder: ", "", 1)
+                if no not in reminders_by_no:
+                    reminders_by_no[no] = r["created_at"]
+        except Exception:
+            pass
+
     results: List[Dict[str, Any]] = []
     for item in data:
         c_id = item["id"]
+        c_no = item.get("complaint_no")
         history = histories_by_id.get(c_id, [])
         assignment = assignments_by_id.get(c_id, None)
         department_name = dept_names_by_id.get(item.get("department_id"), None)
@@ -321,7 +360,8 @@ def list_complaints(
         images = images_by_complaint.get(c_id, [])
         fix_images = fix_images_by_complaint.get(c_id, [])
 
-        results.append(_serialize_complaint(item, history, assignment, department_name, vendor_name, creator_name, images, fix_images))
+        last_rem = reminders_by_no.get(c_no, None)
+        results.append(_serialize_complaint(item, history, assignment, department_name, vendor_name, creator_name, images, fix_images, last_reminder_sent=last_rem))
     return results
 
 
@@ -678,13 +718,6 @@ def assign_vendor(complaint_no: str, payload: AssignVendorRequest) -> Complaint:
         "changed_by": system_user_id,
     }).execute()
 
-    # notify (notifications require user_id)
-    supabase.table("notifications").insert({
-        "user_id": system_user_id,
-        "title": f"{complaint_no} vendor assigned",
-        "message": f"Vendor {payload.vendor} assigned to {complaint_no}",
-    }).execute()
-
     info = _get_complaint_row(complaint_no)
 
     # Send push notifications
@@ -827,11 +860,12 @@ def notify_vendor(complaint_no: str) -> Complaint:
     if not assigned_vendor_id:
         raise HTTPException(status_code=400, detail="No vendor assigned to notify")
 
-    supabase.table("notifications").insert({
-        "user_id": assigned_vendor_id,
-        "title": f"Pending Complaint: {complaint_no}",
-        "message": f"Complaint {complaint_no} is pending your attention.",
-    }).execute()
+    notify_users(
+        user_ids=[assigned_vendor_id],
+        title=f"Pending Complaint: {complaint_no}",
+        body=f"Complaint {complaint_no} is pending your attention.",
+        data={"type": "vendor_notification", "complaintNo": complaint_no}
+    )
 
     return _serialize_complaint(
         info["row"],
@@ -896,13 +930,15 @@ def close_complaint(complaint_no: str, payload: CloseComplaintRequest) -> Compla
 def send_reminder(complaint_no: str) -> Complaint:
     supabase = get_supabase()
     info = _get_complaint_row(complaint_no)
-    system_user_id = _get_system_user_id(supabase)
 
-    supabase.table("notifications").insert({
-        "user_id": system_user_id,
-        "title": f"Reminder sent for {complaint_no}",
-        "message": f"Reminder for complaint {complaint_no}",
-    }).execute()
+    assigned_vendor_id = info["row"].get("assigned_vendor_id")
+    if assigned_vendor_id:
+        notify_users(
+            user_ids=[assigned_vendor_id],
+            title=f"Reminder: {complaint_no}",
+            body=f"Reminder: Please look into complaint '{info['row']['title']}'",
+            data={"type": "reminder", "complaintNo": complaint_no}
+        )
 
     info = _get_complaint_row(complaint_no)
     return _serialize_complaint(
@@ -978,18 +1014,20 @@ def report_issue(complaint_no: str, payload: ReportIssueRequest) -> Dict[str, st
     report_message = payload.details or payload.reason
     
     if assigned_by:
-        supabase.table("notifications").insert({
-            "user_id": assigned_by,
-            "title": report_title,
-            "message": report_message,
-        }).execute()
+        notify_users(
+            user_ids=[assigned_by],
+            title=report_title,
+            body=report_message,
+            data={"type": "report", "complaintNo": complaint_no}
+        )
         
     if assigned_vendor_id:
-        supabase.table("notifications").insert({
-            "user_id": assigned_vendor_id,
-            "title": report_title,
-            "message": report_message,
-        }).execute()
+        notify_users(
+            user_ids=[assigned_vendor_id],
+            title=report_title,
+            body=report_message,
+            data={"type": "report", "complaintNo": complaint_no}
+        )
 
     return {"status": "reported"}
 

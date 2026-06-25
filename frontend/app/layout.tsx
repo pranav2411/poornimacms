@@ -29,6 +29,12 @@ const jetBrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Poornima CMS",
   description: "Complaint Management System for Poornima College Of Engineering",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Poornima CMS",
+  },
 };
 
 export default function RootLayout({

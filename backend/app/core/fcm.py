@@ -6,6 +6,7 @@ import base64
 import logging
 import threading
 from typing import Any, Dict, List, Optional
+from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, messaging
 
@@ -20,6 +21,8 @@ def init_fcm() -> bool:
     global _fcm_initialized
     if _fcm_initialized:
         return True
+
+    load_dotenv()
 
     with _fcm_lock:
         if _fcm_initialized:
@@ -127,6 +130,29 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
         logger.debug("FCM initialization skipped or failed. Push notification not sent.")
         return
 
+    # Resolve absolute HTTPS base URL for WebpushConfig
+    base_url = "https://poornimacms.vercel.app"
+    try:
+        from app.core.config import settings
+        for origin in settings.allowed_origins_list:
+            if origin.startswith("https://"):
+                base_url = origin
+                break
+    except Exception:
+        pass
+
+    webpush_config = messaging.WebpushConfig(
+        notification=messaging.WebpushNotification(
+            title=title,
+            body=body,
+            icon=f"{base_url}/PCElogo.png",
+            badge=f"{base_url}/PCElogo.png",
+        ),
+        fcm_options=messaging.WebpushFCMOptions(
+            link=f"{base_url}/login"
+        )
+    )
+
     # Chunk tokens into maximum 500 per batch (FCM multicast API limit)
     for i in range(0, len(tokens), 500):
         chunk = tokens[i : i + 500]
@@ -143,11 +169,12 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
                 body=body,
             ),
             data=data_str,
+            webpush=webpush_config,
             tokens=chunk,
         )
 
         try:
-            response = messaging.send_multicast(message)
+            response = messaging.send_each_for_multicast(message)
             logger.info(f"FCM: Sent to {len(chunk)} tokens. Success: {response.success_count}, Failure: {response.failure_count}")
             
             # Identify invalid tokens that need to be cleaned up
@@ -157,7 +184,7 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
                     if not resp.success:
                         # Common token expiry/invalid error conditions
                         if resp.exception and (
-                            resp.exception.code == "invalid-argument" 
+                            (hasattr(resp.exception, 'code') and str(resp.exception.code).lower() in ("invalid-argument", "invalid_argument"))
                             or "registration-token-not-registered" in str(resp.exception).lower()
                             or "not-found" in str(resp.exception).lower()
                         ):
@@ -187,18 +214,48 @@ def send_fcm_notification_async(tokens: List[str], title: str, body: str, data: 
 
 # Helper routines for common workflows
 def notify_users(user_ids: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None):
+    if user_ids:
+        try:
+            supabase = get_supabase()
+            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
+            supabase.table("notifications").insert(inserts).execute()
+        except Exception as e:
+            logger.error(f"Error inserting DB notifications for users {user_ids}: {e}")
+
     tokens = get_tokens_for_users(user_ids)
     if tokens:
         send_fcm_notification_async(tokens, title, body, data)
 
 
 def notify_role(role: str, title: str, body: str, data: Optional[Dict[str, str]] = None):
+    try:
+        supabase = get_supabase()
+        # Find user IDs with this role
+        users_resp = supabase.table("users").select("id").eq("role", role).execute()
+        user_ids = [u["id"] for u in (users_resp.data or [])]
+        if user_ids:
+            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
+            supabase.table("notifications").insert(inserts).execute()
+    except Exception as e:
+        logger.error(f"Error inserting DB notifications for role {role}: {e}")
+
     tokens = get_tokens_for_role(role)
     if tokens:
         send_fcm_notification_async(tokens, title, body, data)
 
 
 def notify_all(title: str, body: str, data: Optional[Dict[str, str]] = None):
+    try:
+        supabase = get_supabase()
+        # Find all active users
+        users_resp = supabase.table("users").select("id").eq("is_active", True).execute()
+        user_ids = [u["id"] for u in (users_resp.data or [])]
+        if user_ids:
+            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
+            supabase.table("notifications").insert(inserts).execute()
+    except Exception as e:
+        logger.error(f"Error inserting DB notifications for all users: {e}")
+
     tokens = get_all_tokens()
     if tokens:
         send_fcm_notification_async(tokens, title, body, data)

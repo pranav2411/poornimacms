@@ -35,7 +35,7 @@ def trigger_sos_alert(payload: SosAlertCreate):
     if not sos_resp.data:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to record SOS alert")
 
-    # 3. Insert notification for app-wide alerts
+    # 3. Prepare notification details for app-wide alerts
     notif_title = f"🚨 SOS: {payload.emergencyType.upper()} alert at {payload.location or 'Unknown'}"
     if payload.description:
          notif_title += f" - {payload.description}"
@@ -43,16 +43,7 @@ def trigger_sos_alert(payload: SosAlertCreate):
     alert_id = sos_resp.data[0]["id"]
     notif_message = f"Emergency triggered by {user_name}. Location: {payload.location or 'Unknown'}. Details: {payload.description or 'No details'} [SOS_ID:{alert_id}]"
 
-    notif_resp = supabase.table("notifications").insert({
-        "user_id": payload.triggeredBy,
-        "title": notif_title,
-        "message": notif_message
-    }).execute()
-
-    if not notif_resp.data:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to trigger app notification")
-
-    # Send push notification to everyone
+    # Send push notification to everyone (this will also write DB notifications for all active users)
     notify_all(
         title=notif_title,
         body=notif_message,

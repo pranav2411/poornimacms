@@ -1,11 +1,15 @@
 import { FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
 import { GoogleAuthProvider, getAuth } from "firebase/auth";
 
+const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
+const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (appId ? appId.split(":")[1] : undefined);
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  appId: appId,
+  messagingSenderId: messagingSenderId,
 };
 
 function assertFirebaseConfig() {
