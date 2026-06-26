@@ -1,6 +1,6 @@
 # Poornima CMS
 
-Poornima CMS is a comprehensive **Complaint Management System** built for Poornima College Of Engineering. The application enables faculty to register complaints, admins to coordinate assignments, and vendors to resolve maintenance tasks. It includes a real-time push notification system (via Firebase Cloud Messaging) and an SOS emergency broadcast feature.
+Poornima CMS is a **Complaint Management System** built for Poornima College Of Engineering. The application enables faculty to register complaints, admins to coordinate assignments, and vendors to resolve maintenance tasks. It includes a real-time push notification system (via Firebase Cloud Messaging) and an SOS emergency broadcast feature.
 
 ## Project Structure
 
