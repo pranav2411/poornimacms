@@ -36,6 +36,7 @@ export default function DashboardShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [storedUser, setStoredUser] = useState<{
     name?: string;
     avatarUrl?: string;
@@ -110,6 +111,8 @@ export default function DashboardShell({
     storedUser?.avatarUrl?.trim() ||
     (avatarUrl && avatarUrl !== "/user-no-av.png" ? avatarUrl : "/user-no-av.png");
 
+
+
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (!menuRef.current) return;
@@ -136,6 +139,7 @@ export default function DashboardShell({
 
   const handleLogout = () => {
     setMenuOpen(false);
+    setIsLoggingOut(true);
     window.localStorage.removeItem("poornima-user");
     void firebaseSignOut(getFirebaseAuth()).finally(() => {
       void signOut({ callbackUrl: "/login" });
@@ -149,6 +153,16 @@ export default function DashboardShell({
 
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#f4f6fb]/80 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-accent" />
+            <p className="text-sm font-semibold text-slate-800 animate-pulse">
+              Signing you out...
+            </p>
+          </div>
+        </div>
+      )}
       <div className="hidden lg:flex lg:h-screen lg:sticky lg:top-0 lg:shrink-0">
         <Sidebar role={role} />
       </div>

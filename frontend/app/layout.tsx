@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Plus_Jakarta_Sans, Geist } from "next/font/google";
+import { Inter, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import ShaderBackground from "@/components/ShaderBackground";
 import { Toaster } from "@/components/Toaster";
 import { cn } from "@/lib/utils";
 import Providers from "@/components/Providers";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -45,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", plusJakarta.variable, inter.variable, jetBrains.variable, "font-sans", geist.variable)}
+      className={cn("h-full", "antialiased", plusJakarta.variable, inter.variable, jetBrains.variable, "font-sans")}
     >
       <body className="min-h-full flex flex-col bg-bg text-body">
         <ShaderBackground />

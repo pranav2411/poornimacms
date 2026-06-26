@@ -10,8 +10,10 @@ import SupportModal from "@/components/SupportModal";
 
 export default function UnauthorizedPage() {
   const [showHelp, setShowHelp] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = () => {
+    setIsLoggingOut(true);
     // Clear local storage user profile
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("poornima-user");
@@ -27,6 +29,16 @@ export default function UnauthorizedPage() {
       className="relative flex min-h-screen items-center justify-center bg-[#f4f6fb] px-6 py-12"
       style={{ backgroundImage: "url('/cmsbg.png')", backgroundSize: "480px" }}
     >
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#f4f6fb]/80 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-accent" />
+            <p className="text-sm font-semibold text-slate-800 animate-pulse">
+              Signing you out...
+            </p>
+          </div>
+        </div>
+      )}
       <div className="absolute inset-0 bg-black/10" />
       <GlassCard
         className="relative z-10 w-full max-w-md p-8 text-center shadow-[0_36px_96px_rgba(15,23,42,0.15)] md:p-10"

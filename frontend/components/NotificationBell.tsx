@@ -16,7 +16,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  
+
   const processedNotificationsRef = useRef<Set<string>>(new Set());
 
   const unreadNotifications = notifications.filter((item) => !readIds.has(item.id));
@@ -40,7 +40,7 @@ export default function NotificationBell() {
             processedNotificationsRef.current.add(item.id);
             if (!isFirstLoad) {
               const isSos = item.title.startsWith("🚨 SOS");
-              
+
               // 1. Trigger screen toast
               addToast({
                 title: item.title,
@@ -148,13 +148,17 @@ export default function NotificationBell() {
         vibrate: [200, 100, 200],
       };
 
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.ready
+      if ("serviceWorker" in navigator && "showNotification" in ServiceWorkerRegistration.prototype) {
+        navigator.serviceWorker.getRegistration()
           .then((registration) => {
-            registration.showNotification(title, options);
+            if (registration && registration.showNotification) {
+              registration.showNotification(title, options);
+            } else {
+              new Notification(title, options);
+            }
           })
           .catch((err) => {
-            console.warn("FCM: SW registration not ready, falling back:", err);
+            console.warn("FCM: Error getting registration, falling back:", err);
             new Notification(title, options);
           });
       } else {
@@ -207,7 +211,7 @@ export default function NotificationBell() {
         )}
       </Button>
       {open && (
-        <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-80 max-w-80 rounded-2xl border border-border bg-surface/90 p-4 shadow-lg">
+        <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-80 max-w-80 rounded-2xl border border-border bg-surface/90 p-4 shadow-lg z-50">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
               Updates

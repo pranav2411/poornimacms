@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import json
 import base64
 import logging
@@ -166,8 +167,11 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
         logger.debug("FCM initialization skipped or failed. Push notification not sent.")
         return
 
+    # Clean the notification body (strip out metadata tags like '[SOS_ID:uuid]' for presentation to user)
+    clean_body = re.sub(r"\s*\[SOS_ID:[a-fA-F0-9\-]+\]", "", body).strip()
+
     if _fcm_is_dummy:
-        logger.info(f"FCM: Dummy mode active. Skipping push notification: '{title}' - '{body}'")
+        logger.info(f"FCM: Dummy mode active. Skipping push notification: '{title}' - '{clean_body}'")
         return
 
     # Resolve absolute HTTPS base URL for WebpushConfig
@@ -184,7 +188,7 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
     webpush_config = messaging.WebpushConfig(
         notification=messaging.WebpushNotification(
             title=title,
-            body=body,
+            body=clean_body,
             icon=f"{base_url}/PCElogo.png",
             badge=f"{base_url}/PCElogo.png",
         ),
@@ -206,7 +210,7 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
                 title=title,
-                body=body,
+                body=clean_body,
             ),
             data=data_str,
             webpush=webpush_config,

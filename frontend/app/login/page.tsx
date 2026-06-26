@@ -187,7 +187,6 @@ function LoginPageContent() {
           email: user.email as string,
           name: profile.name,
           image: profile.avatarUrl || user.photoURL || "",
-          redirectTo: target,
         });
 
         if (nextAuthResult?.error) {
@@ -207,12 +206,17 @@ function LoginPageContent() {
           avatarUrl: profile.avatarUrl,
         });
 
-        router.replace(target);
+        window.location.replace(target);
       } catch (error) {
         if (
           error instanceof FirebaseError &&
           error.code === "auth/no-auth-event"
         ) {
+          return;
+        }
+
+        // If it's a redirect error, let Next.js handle it; keep loading state active
+        if (error instanceof Error && (error.message === "NEXT_REDIRECT" || error.message.includes("redirect"))) {
           return;
         }
 
@@ -252,7 +256,6 @@ function LoginPageContent() {
         email: user.email as string,
         name: profile.name,
         image: profile.avatarUrl || user.photoURL || "",
-        redirectTo: target,
       });
 
       if (nextAuthResult?.error) {
@@ -272,10 +275,15 @@ function LoginPageContent() {
         avatarUrl: profile.avatarUrl,
       });
 
-      router.replace(target);
+      window.location.replace(target);
     } catch (error) {
       if (error instanceof FirebaseError && error.code === "auth/popup-closed-by-user") {
         setState("idle");
+        return;
+      }
+
+      // If it's a redirect error, let Next.js handle it; keep loading state active
+      if (error instanceof Error && (error.message === "NEXT_REDIRECT" || error.message.includes("redirect"))) {
         return;
       }
 
@@ -287,10 +295,21 @@ function LoginPageContent() {
   };
 
   return (
-    <div
-      className="relative flex min-h-screen items-center justify-center bg-[#f4f6fb] bg-center bg-repeat px-6 py-12"
-      style={{ backgroundImage: "url('/cmsbg.png')", backgroundSize: "480px" }}
-    >
+    <>
+      {state === "loading" && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#f4f6fb]/80 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative h-14 w-14 animate-spin rounded-full border-4 border-slate-200 border-t-accent" />
+            <p className="text-sm font-semibold text-slate-800 animate-pulse">
+              Signing you in...
+            </p>
+          </div>
+        </div>
+      )}
+      <div
+        className="relative flex min-h-screen items-center justify-center bg-[#f4f6fb] bg-center bg-repeat px-6 py-12"
+        style={{ backgroundImage: "url('/cmsbg.png')", backgroundSize: "480px" }}
+      >
       <div className="absolute inset-0 bg-black/20" />
       <div className="relative z-10 flex w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_36px_96px_rgba(15,23,42,0.4)] lg:min-h-[620px] lg:flex-row">
         <div className="order-2 flex w-full flex-col justify-center px-10 py-12 lg:order-2 lg:w-1/2 lg:px-14">
@@ -364,7 +383,8 @@ function LoginPageContent() {
         </div>
       </div>
     </div>
-  );
+  </>
+);
 }
 
 export default function LoginPage() {

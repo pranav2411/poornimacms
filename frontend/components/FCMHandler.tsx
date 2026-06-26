@@ -281,6 +281,27 @@ export default function FCMHandler() {
           { scope: "/" }
         );
 
+        // Ensure the service worker is active before retrieving the token
+        let serviceWorker = swRegistration.active;
+        if (!serviceWorker || serviceWorker.state !== "activated") {
+          const candidate = swRegistration.installing || swRegistration.waiting || swRegistration.active;
+          if (candidate) {
+            await new Promise<void>((resolve) => {
+              const handleStateChange = () => {
+                if (candidate.state === "activated" || candidate.state === "redundant") {
+                  candidate.removeEventListener("statechange", handleStateChange);
+                  resolve();
+                }
+              };
+              candidate.addEventListener("statechange", handleStateChange);
+              if (candidate.state === "activated" || candidate.state === "redundant") {
+                candidate.removeEventListener("statechange", handleStateChange);
+                resolve();
+              }
+            });
+          }
+        }
+
         const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim();
         if (!vapidKey) {
           console.warn("FCM: NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing.");
@@ -306,7 +327,8 @@ export default function FCMHandler() {
         // Foreground message handler
         unsubscribe = onMessage(messaging, (payload) => {
           const title = payload.notification?.title || "Poornima CMS Alert";
-          const body = payload.notification?.body || "";
+          const rawBody = payload.notification?.body || "";
+          const body = rawBody.replace(/\s*\[SOS_ID:[a-fA-F0-9\-]+\]/, "").trim();
           const link =
             (payload.data as Record<string, string> | undefined)?.link ||
             (payload.fcmOptions as { link?: string } | undefined)?.link ||

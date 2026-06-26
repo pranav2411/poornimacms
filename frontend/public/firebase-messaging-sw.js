@@ -1,6 +1,15 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
+// Force the service worker to activate immediately and take control of the clients
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 firebase.initializeApp({
   apiKey: "AIzaSyBb9JDMLqtqWFG2BdTFogNx_W8T7laJR3Q",
   authDomain: "poornimacms.firebaseapp.com",
@@ -23,8 +32,11 @@ messaging.onBackgroundMessage((payload) => {
     payload.fcmOptions?.link ||
     '/';
 
+  const rawBody = payload.notification?.body || '';
+  const cleanBody = rawBody.replace(/\s*\[SOS_ID:[a-fA-F0-9\-]+\]/, '').trim();
+
   const notificationOptions = {
-    body: payload.notification?.body || '',
+    body: cleanBody,
     icon: self.location.origin + '/PCElogo.png',
     badge: self.location.origin + '/PCElogo.png',
     // Using a unique tag per-message prevents stacking identical toasts
@@ -84,9 +96,11 @@ self.addEventListener('push', function (event) {
     body = event.data.text();
   }
 
+  const cleanBody = body.replace(/\s*\[SOS_ID:[a-fA-F0-9\-]+\]/, '').trim();
+
   event.waitUntil(
     self.registration.showNotification(title, {
-      body,
+      body: cleanBody,
       icon: self.location.origin + '/PCElogo.png',
       badge: self.location.origin + '/PCElogo.png',
       tag: 'pcms-fallback-' + Date.now(),
