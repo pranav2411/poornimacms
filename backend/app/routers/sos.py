@@ -22,21 +22,26 @@ def trigger_sos_alert(
     supabase = get_supabase()
 
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
-    if not is_super and payload.triggeredBy != current_user.get("id"):
+    
+    triggered_by_id = payload.triggeredBy
+    if not is_super or triggered_by_id == "system":
+        triggered_by_id = current_user.get("id")
+
+    if not triggered_by_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot trigger SOS alert for another user"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid user ID is required to trigger SOS alert"
         )
 
     # 1. Fetch user details to get their name
-    user_resp = supabase.table("users").select("id, name").eq("id", payload.triggeredBy).limit(1).execute()
+    user_resp = supabase.table("users").select("id, name").eq("id", triggered_by_id).limit(1).execute()
     if not user_resp.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user_name = user_resp.data[0]["name"]
 
     # 2. Insert alert into the sos_alerts table
     sos_payload = {
-        "triggered_by": payload.triggeredBy,
+        "triggered_by": triggered_by_id,
         "location": payload.location or "Unknown Location",
         "message": f"[{payload.emergencyType.upper()}] {payload.description or ''}".strip(),
         "status": "active"
