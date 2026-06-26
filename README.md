@@ -90,7 +90,7 @@ NEXT_PUBLIC_FIREBASE_VAPID_KEY=your-vapid-public-key
 
 ## Features & Roles
 
-- **Faculty**: Can submit complaints, upload images of issues, track statuses, verify solutions, and trigger SOS alerts.
+- **Faculty**: Can submit complaints, upload images of issues, track statuses, verify solutions, and trigger SOS alerts and much more.
 - **Admin**: Can prioritize complaints, assign work to specific vendors, verify completions, and manage departments.
 - **Vendor**: View assigned tasks, mark jobs as finished, upload completion images, and report blocking issues.
 - **Super Admin**: Monitor analytics, manage users/vendors, verify pending registrations, and handle system configurations.
