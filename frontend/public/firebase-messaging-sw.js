@@ -2,11 +2,11 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyBb9JDMLqtqWFG2BdTFogNx_W8T7laJR3Q",
-  authDomain: "poornimacms.firebaseapp.com",
-  projectId: "poornimacms",
-  appId: "1:207036150574:web:5783b6615c4330885800bf",
-  messagingSenderId: "207036150574"
+  apiKey: "AIzaSyCsYlCmkAAYDO_7BOPAsckp9ky0JclVtyM",
+  authDomain: "poornimacms-4d082.firebaseapp.com",
+  projectId: "poornimacms-4d082",
+  appId: "1:452642564279:web:94477cb6754f7c4364c532",
+  messagingSenderId: "452642564279"
 });
 
 const messaging = firebase.messaging();
