@@ -7,16 +7,15 @@ import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { registerFCMToken } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 
-const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.NEXT_PUBLIC_FIREBASE_APPID;
+const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 const messagingSenderId =
   process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
-  process.env.NEXT_PUBLIC_FIREBASE_MESSAGINGSENDERID ||
   (appId ? appId.split(":")[1] : undefined);
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_APIKEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.NEXT_PUBLIC_FIREBASE_AUTHDOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECTID,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   appId: appId,
   messagingSenderId: messagingSenderId,
 };
@@ -282,7 +281,7 @@ export default function FCMHandler() {
           { scope: "/" }
         );
 
-        const vapidKey = (process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || process.env.NEXT_PUBLIC_FIREBASE_VAPIDKEY)?.trim();
+        const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim();
         if (!vapidKey) {
           console.warn("FCM: NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing.");
           return;
