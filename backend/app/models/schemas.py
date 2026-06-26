@@ -41,6 +41,8 @@ class Complaint(BaseModel):
     workCompleted: Optional[bool] = None
     closeReason: Optional[str] = None
     lastReminderSent: Optional[str] = None
+    vendorChangeRequested: Optional[bool] = None
+    vendorChangeReason: Optional[str] = None
 
 
 class ComplaintCreate(BaseModel):
@@ -79,6 +81,10 @@ class CloseComplaintRequest(BaseModel):
 class ReportIssueRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=200)
     details: Optional[str] = Field(default=None, max_length=1200)
+
+
+class RequestVendorChangeRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=500)
 
 
 class StatItem(BaseModel):

@@ -176,6 +176,14 @@ export const markFixed = async (complaintId: string, remarks?: string, image?: s
   return mapComplaint(data);
 };
 
+export const requestVendorChange = async (complaintId: string, reason: string) => {
+  const data = await request<Complaint>(`/complaints/${complaintId}/request-vendor-change`, {
+    method: "POST",
+    body: { reason },
+  });
+  return mapComplaint(data);
+};
+
 export const verifySolution = async (complaintId: string) => {
   const data = await request<Complaint>(`/complaints/${complaintId}/verify-solution`, {
     method: "POST",

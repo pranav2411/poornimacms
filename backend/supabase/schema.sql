@@ -52,7 +52,9 @@ CREATE TABLE complaints (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   resolved_at TIMESTAMP NULL,
-  cancelled_at TIMESTAMP NULL
+  cancelled_at TIMESTAMP NULL,
+  vendor_change_requested BOOLEAN DEFAULT FALSE,
+  vendor_change_reason TEXT NULL
 );
 
 CREATE TABLE complaint_images (

@@ -15,6 +15,7 @@ from app.models.schemas import (
     ReportIssueRequest,
     MarkFixedRequest,
     ComplaintUpdate,
+    RequestVendorChangeRequest,
 )
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
@@ -108,6 +109,8 @@ def _serialize_complaint(
         "workCompleted": row.get("status") in ("done", "resolved"),
         "closeReason": row.get("cancellation_reason"),
         "lastReminderSent": last_reminder_sent,
+        "vendorChangeRequested": row.get("vendor_change_requested"),
+        "vendorChangeReason": row.get("vendor_change_reason"),
     }
 
 
@@ -769,13 +772,15 @@ def assign_vendor(
     supabase.table("complaint_assignments").insert({
         "complaint_id": complaint_id,
         "vendor_id": vendor_id,
-        "assigned_by": system_user_id,
+        "assigned_by": current_user.get("id") or system_user_id,
     }).execute()
 
     # update complaint
     supabase.table("complaints").update({
         "assigned_vendor_id": vendor_id,
         "status": "vendor_assigned",
+        "vendor_change_requested": False,
+        "vendor_change_reason": None,
         "updated_at": now,
     }).eq("id", complaint_id).execute()
 
@@ -785,7 +790,7 @@ def assign_vendor(
         "old_status": info["row"].get("status"),
         "new_status": "vendor_assigned",
         "remarks": f"Vendor assigned: {payload.vendor}",
-        "changed_by": system_user_id,
+        "changed_by": current_user.get("id") or system_user_id,
     }).execute()
 
     info = _get_complaint_row(complaint_no)
@@ -1202,6 +1207,24 @@ def report_issue(
         except Exception:
             reports_table_exists = False
 
+    # Update complaint status to vendor_assigned
+    now = _now_iso()
+    supabase.table("complaints").update({
+        "status": "vendor_assigned",
+        "resolved_at": None,
+        "updated_at": now,
+    }).eq("id", complaint_id).execute()
+
+    # Record status history
+    system_user_id = _get_system_user_id(supabase)
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": "done",
+        "new_status": "vendor_assigned",
+        "remarks": f"Faculty reported issue: {payload.reason}. Details: {payload.details or ''}",
+        "changed_by": current_user.get("id") or system_user_id,
+    }).execute()
+
     # Send notifications to admin and vendor under reports tab
     report_title = f"[REPORT] {complaint_no}: {payload.reason}"
     report_message = payload.details or payload.reason
@@ -1223,6 +1246,96 @@ def report_issue(
         )
 
     return {"status": "reported"}
+
+
+@router.post("/{complaint_no}/request-vendor-change", response_model=Complaint)
+def request_vendor_change(
+    complaint_no: str,
+    payload: RequestVendorChangeRequest,
+    current_user: dict = Depends(require_roles(["vendor"]))
+) -> Complaint:
+    info = _get_complaint_row(complaint_no)
+    complaint = info["row"]
+    complaint_id = complaint["id"]
+    assigned_vendor_id = complaint.get("assigned_vendor_id")
+    
+    if not assigned_vendor_id or str(assigned_vendor_id) != str(current_user.get("id")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned vendor can request a vendor change"
+        )
+        
+    status_val = str(complaint.get("status") or "").lower()
+    if status_val in ("done", "resolved", "cancelled"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot request vendor change on a completed or cancelled complaint"
+        )
+        
+    supabase = get_supabase()
+    
+    # Find assigning admin
+    assigned_by = None
+    assignment_resp = (
+        supabase.table("complaint_assignments")
+        .select("assigned_by")
+        .eq("complaint_id", complaint_id)
+        .order("assigned_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if assignment_resp.data:
+        assigned_by = assignment_resp.data[0].get("assigned_by")
+        
+    now = _now_iso()
+    supabase.table("complaints").update({
+        "vendor_change_requested": True,
+        "vendor_change_reason": payload.reason,
+        "updated_at": now,
+    }).eq("id", complaint_id).execute()
+    
+    system_user_id = _get_system_user_id(supabase)
+    supabase.table("complaint_status_history").insert({
+        "complaint_id": complaint_id,
+        "old_status": status_val,
+        "new_status": status_val,
+        "remarks": f"Vendor requested change: {payload.reason}",
+        "changed_by": current_user.get("id") or system_user_id,
+    }).execute()
+    
+    admin_ids = []
+    if assigned_by:
+        admin_ids.append(assigned_by)
+    else:
+        dept_id = complaint.get("department_id")
+        if dept_id:
+            dept_resp = supabase.table("departments").select("head_user_id").eq("id", dept_id).execute()
+            if dept_resp.data:
+                admin_ids.append(dept_resp.data[0].get("head_user_id"))
+                
+    if not admin_ids:
+        admins_resp = supabase.table("users").select("id").eq("role", "admin").execute()
+        admin_ids = [u["id"] for u in admins_resp.data] if admins_resp.data else []
+        
+    if admin_ids:
+        notify_users(
+            user_ids=admin_ids,
+            title=f"Vendor Change Requested: {complaint_no}",
+            body=f"Vendor '{current_user.get('name')}' requested a change for: '{complaint['title']}'. Reason: {payload.reason}",
+            data={"type": "vendor_change_request", "complaintNo": complaint_no}
+        )
+        
+    updated_info = _get_complaint_row(complaint_no)
+    return _serialize_complaint(
+        updated_info["row"],
+        updated_info["history"],
+        updated_info["assignment"],
+        updated_info.get("department_name"),
+        updated_info.get("vendor_name"),
+        updated_info.get("creator_name"),
+        updated_info.get("images"),
+        updated_info.get("fix_images")
+    )
 
 
 @router.delete("/{complaint_no}", status_code=status.HTTP_204_NO_CONTENT)

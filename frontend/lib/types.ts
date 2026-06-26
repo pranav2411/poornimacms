@@ -37,6 +37,8 @@ export type Complaint = {
   resolvedAt?: string | null;
   cancelledAt?: string | null;
   departmentId?: string | null;
+  vendorChangeRequested?: boolean;
+  vendorChangeReason?: string | null;
 };
 
 export type StatItem = {

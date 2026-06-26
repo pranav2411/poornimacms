@@ -117,8 +117,27 @@ export default function AdminComplaintDetailPage({
                 {complaint?.title ?? "Loading..."}
               </h2>
             </div>
-            {complaint ? <StatusPill status={complaint.status} /> : null}
           </div>
+
+          {complaint?.vendorChangeRequested && (
+            <div className="mt-4 rounded-2xl border border-pending/30 bg-pending/10 p-4 text-sm text-heading animate-pulse">
+              <p className="font-semibold text-pending">
+                Vendor Reassignment Requested
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Reason: "{complaint.vendorChangeReason}"
+              </p>
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="border-pending bg-pending text-surface hover:bg-transparent hover:text-pending"
+                >
+                  Change Vendor
+                </Button>
+              </div>
+            </div>
+          )}
 
           {complaint && (
             <div className="mt-6 grid gap-3 text-sm text-body border-b border-border/50 pb-6">
