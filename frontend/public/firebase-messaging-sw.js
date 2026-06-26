@@ -11,43 +11,88 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// ─── Background message handler ────────────────────────────────────────────
+// Fires when the app is in the background / tab is closed.
+// The Notification API here creates the system-level notification that
+// appears in Chrome's notification panel (and the Android notification shade).
 messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || 'Poornima CMS Alert';
+  const link =
+    payload.data?.link ||
+    payload.notification?.click_action ||
+    payload.fcmOptions?.link ||
+    '/';
+
   const notificationOptions = {
     body: payload.notification?.body || '',
     icon: self.location.origin + '/PCElogo.png',
     badge: self.location.origin + '/PCElogo.png',
-    tag: 'poornima-cms-notification',
-    data: payload.data
+    // Using a unique tag per-message prevents stacking identical toasts
+    tag: 'pcms-' + Date.now(),
+    // requireInteraction keeps it visible until user acts (desktop Chrome)
+    requireInteraction: true,
+    // vibrate pattern for Android
+    vibrate: [200, 100, 200],
+    data: { link },
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-self.addEventListener('notificationclick', function(event) {
+// ─── Notification click handler ─────────────────────────────────────────────
+// Fires on desktop Chrome AND Android Chrome when the user taps the notification.
+self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  
-  // Extract link from FCM payload data structures
-  const fcmOptions = event.notification.data?.FCM_MSG?.notification?.fcm_options;
-  const fcmLink = fcmOptions?.link;
-  const clickAction = event.notification.data?.click_action || fcmLink || event.notification.data?.link || '/';
-  
+
+  const link = event.notification.data?.link || '/';
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      if (clientList.length > 0) {
-        let client = clientList[0];
-        for (let i = 0; i < clientList.length; i++) {
-          if (clientList[i].focused) {
-            client = clientList[i];
-            break;
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then(function (clientList) {
+        // Focus existing open tab if present
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.navigate(link);
+            return client.focus();
           }
         }
-        if (client.navigate) {
-          client.navigate(clickAction);
-        }
-        return client.focus();
-      }
-      return clients.openWindow(clickAction);
+        // Otherwise open a new window
+        return clients.openWindow(link);
+      })
+  );
+});
+
+// ─── Push event fallback ────────────────────────────────────────────────────
+// Some browsers (Samsung Internet, older Android WebView) fire 'push' directly
+// and may not go through onBackgroundMessage. This acts as a safety net.
+self.addEventListener('push', function (event) {
+  // If Firebase already handled it, it won't reach here.
+  // This fires only if the Firebase SDK didn't intercept.
+  if (!event.data) return;
+
+  let title = 'Poornima CMS Alert';
+  let body = '';
+  let link = '/';
+
+  try {
+    const data = event.data.json();
+    title = data?.notification?.title || title;
+    body = data?.notification?.body || body;
+    link = data?.data?.link || data?.notification?.click_action || link;
+  } catch {
+    body = event.data.text();
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: self.location.origin + '/PCElogo.png',
+      badge: self.location.origin + '/PCElogo.png',
+      tag: 'pcms-fallback-' + Date.now(),
+      requireInteraction: true,
+      vibrate: [200, 100, 200],
+      data: { link },
     })
   );
 });

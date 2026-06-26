@@ -15,14 +15,48 @@ from app.db.supabase import get_supabase
 logger = logging.getLogger(__name__)
 
 _fcm_initialized = False
+_fcm_is_dummy = False
 _fcm_lock = threading.Lock()
 
+def _get_dummy_service_account() -> dict:
+    try:
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=1024
+        )
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode("utf-8")
+    except Exception:
+        private_key_pem = (
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIICXAIBAAKBgQDC7V/r5bH6uQ41p2w8gD9J8c9s+E0lBv9sXn9s2E9sXn9sXn9s\n"
+            "-----END PRIVATE KEY-----\n"
+        )
+
+    return {
+        "type": "service_account",
+        "project_id": "poornimacms",
+        "private_key_id": "dummy_local_key",
+        "private_key": private_key_pem,
+        "client_email": "firebase-adminsdk-dummy@poornimacms.iam.gserviceaccount.com",
+        "client_id": "1234567890",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-dummy%40poornimacms.iam.gserviceaccount.com"
+    }
+
 def init_fcm() -> bool:
-    global _fcm_initialized
+    global _fcm_initialized, _fcm_is_dummy
     if _fcm_initialized:
         return True
 
-    load_dotenv()
+    load_dotenv(override=True)
 
     with _fcm_lock:
         if _fcm_initialized:
@@ -71,22 +105,24 @@ def init_fcm() -> bool:
                 except Exception as e:
                     logger.error(f"Failed to read default serviceAccountKey.json file: {e}")
 
-        if service_account_info:
-            try:
-                cred = credentials.Certificate(service_account_info)
-                firebase_admin.initialize_app(cred)
-                _fcm_initialized = True
-                logger.info("Firebase Admin SDK initialized successfully for FCM.")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to initialize Firebase Admin SDK with credentials: {e}")
-                return False
+        if not service_account_info:
+            logger.warning(
+                "Firebase credentials (FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PRIVATE_KEY/CLIENT_EMAIL/PROJECT_ID) "
+                "are not configured. Using dummy local fallback credentials for local token validation. "
+                "FCM push notifications will be skipped."
+            )
+            _fcm_is_dummy = True
+            service_account_info = _get_dummy_service_account()
 
-        logger.warning(
-            "Firebase credentials (FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PRIVATE_KEY/CLIENT_EMAIL/PROJECT_ID) "
-            "are not configured. FCM push notifications will be skipped."
-        )
-        return False
+        try:
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+            _fcm_initialized = True
+            logger.info("Firebase Admin SDK initialized successfully.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Firebase Admin SDK with credentials: {e}")
+            return False
 
 
 def get_tokens_for_users(user_ids: List[str]) -> List[str]:
@@ -128,6 +164,10 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
 
     if not init_fcm():
         logger.debug("FCM initialization skipped or failed. Push notification not sent.")
+        return
+
+    if _fcm_is_dummy:
+        logger.info(f"FCM: Dummy mode active. Skipping push notification: '{title}' - '{body}'")
         return
 
     # Resolve absolute HTTPS base URL for WebpushConfig

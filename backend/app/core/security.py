@@ -67,6 +67,20 @@ def get_current_user(
     users = response.data or []
     
     if not users:
+        # Fallback: Check if a user row exists with the same email but has a different or empty firebase_uid
+        email = decoded_token.get("email")
+        if email:
+            email_resp = supabase.table("users").select("*").eq("email", email).limit(1).execute()
+            email_users = email_resp.data or []
+            if email_users:
+                user = email_users[0]
+                # Auto-link the firebase_uid in the database
+                supabase.table("users").update({"firebase_uid": firebase_uid}).eq("id", user["id"]).execute()
+                # Reload the user row
+                response = supabase.table("users").select("*").eq("id", user["id"]).limit(1).execute()
+                users = response.data or []
+
+    if not users:
         # User is authenticated in Firebase but does not exist in our database yet
         # Return a shell object with db_registered = False to allow registration routes
         return {

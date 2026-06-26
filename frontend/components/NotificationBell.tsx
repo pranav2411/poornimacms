@@ -34,21 +34,49 @@ export default function NotificationBell() {
         const isFirstLoad = processedNotificationsRef.current.size === 0;
 
         data.forEach((item) => {
-          const isSos = item.title.startsWith("🚨 SOS");
           const hasNotBeenProcessed = !processedNotificationsRef.current.has(item.id);
 
-          if (isSos && hasNotBeenProcessed) {
+          if (hasNotBeenProcessed) {
             processedNotificationsRef.current.add(item.id);
             if (!isFirstLoad) {
-              // Trigger a high-priority destructive screen toast
+              const isSos = item.title.startsWith("🚨 SOS");
+              
+              // 1. Trigger screen toast
               addToast({
                 title: item.title,
-                description: "App-wide emergency alert triggered. Look at the updates dashboard.",
-                variant: "destructive",
+                description: isSos
+                  ? "App-wide emergency alert triggered."
+                  : "New system update received.",
+                variant: isSos ? "destructive" : "default",
               });
+
+              // 2. Trigger native Chrome notification pop-up
+              if (
+                typeof window !== "undefined" &&
+                "Notification" in window &&
+                Notification.permission === "granted"
+              ) {
+                const notifTitle = isSos ? "🚨 SOS ALERT" : "Poornima CMS Update";
+                const options = {
+                  body: item.title,
+                  icon: "/PCElogo.png",
+                  badge: "/PCElogo.png",
+                  vibrate: [200, 100, 200],
+                };
+
+                if ("serviceWorker" in navigator) {
+                  navigator.serviceWorker.ready
+                    .then((registration) => {
+                      registration.showNotification(notifTitle, options);
+                    })
+                    .catch(() => {
+                      new Notification(notifTitle, options);
+                    });
+                } else {
+                  new Notification(notifTitle, options);
+                }
+              }
             }
-          } else {
-            processedNotificationsRef.current.add(item.id);
           }
         });
 
@@ -102,6 +130,48 @@ export default function NotificationBell() {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (error) {
       console.error("Failed to delete notification", error);
+    }
+  };
+
+  const handleTestPopup = () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      alert("Notifications are not supported in this browser.");
+      return;
+    }
+
+    const showNotification = () => {
+      const title = "Test Notification";
+      const options = {
+        body: "This is a test pop-up notification from Chrome for Poornima CMS!",
+        icon: "/PCElogo.png",
+        badge: "/PCElogo.png",
+        vibrate: [200, 100, 200],
+      };
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.ready
+          .then((registration) => {
+            registration.showNotification(title, options);
+          })
+          .catch((err) => {
+            console.warn("FCM: SW registration not ready, falling back:", err);
+            new Notification(title, options);
+          });
+      } else {
+        new Notification(title, options);
+      }
+    };
+
+    if (Notification.permission === "granted") {
+      showNotification();
+    } else {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          showNotification();
+        } else {
+          alert("Notification permission was denied. Please allow notifications in Chrome settings.");
+        }
+      });
     }
   };
 
@@ -181,6 +251,15 @@ export default function NotificationBell() {
               ))}
             </div>
           )}
+          <div className="mt-4 border-t border-border/60 pt-3 flex justify-end">
+            <button
+              onClick={handleTestPopup}
+              type="button"
+              className="text-[0.7rem] font-medium text-muted hover:text-heading flex items-center gap-1 transition-colors"
+            >
+              🔔 Test Chrome Pop-up
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status, Depends
+from fastapi import APIRouter, HTTPException, Query, status, Depends, Response
 from app.db.supabase import get_supabase
 from app.core.fcm import notify_users, notify_role
 from app.core.security import get_current_user, require_roles
@@ -1229,7 +1229,7 @@ def report_issue(
 def delete_complaint(
     complaint_no: str, 
     current_user: dict = Depends(require_roles(["admin"]))
-) -> None:
+):
     info = _get_complaint_row(complaint_no)
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
@@ -1249,7 +1249,7 @@ def delete_complaint(
     if not delete_resp.data:
         raise HTTPException(status_code=500, detail="Failed to delete complaint")
     
-    return
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/{complaint_no}", response_model=Complaint)

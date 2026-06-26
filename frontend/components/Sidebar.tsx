@@ -8,6 +8,7 @@ import type { UserRole } from "@/lib/role-context";
 import Logo from "@/components/Logo";
 import Image from "next/image";
 import { getSosHistory } from "@/lib/api";
+import { useSession } from "next-auth/react";
 
 const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
   faculty: [
@@ -506,8 +507,11 @@ export default function Sidebar({
   const pathname = usePathname();
   const uid = useId();
   const [hasActiveSos, setHasActiveSos] = useState(false);
+  const { status } = useSession();
 
   useEffect(() => {
+    if (status !== "authenticated") return;
+
     let isMounted = true;
     const checkSos = async () => {
       try {
@@ -524,7 +528,7 @@ export default function Sidebar({
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [status]);
 
   let items = [...navConfig[role]];
   if (role !== "superadmin") {

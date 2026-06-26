@@ -40,6 +40,10 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
     try {
       const { getFirebaseAuth } = await import("@/lib/firebase");
       const firebaseAuth = getFirebaseAuth();
+      // Wait for Firebase to finish loading local auth credentials
+      if (typeof firebaseAuth.authStateReady === "function") {
+        await firebaseAuth.authStateReady();
+      }
       if (firebaseAuth.currentUser) {
         token = await firebaseAuth.currentUser.getIdToken();
       }
