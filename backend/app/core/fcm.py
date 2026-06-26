@@ -74,10 +74,16 @@ def init_fcm() -> bool:
                 # Try to base64 decode it first (common for cloud platforms)
                 try:
                     decoded = base64.b64decode(sa_json).decode("utf-8")
-                    service_account_info = json.loads(decoded)
+                    parsed = json.loads(decoded)
+                    if isinstance(parsed, str):
+                        parsed = json.loads(parsed)
+                    service_account_info = parsed
                 except Exception:
                     # Fallback to loading it directly as raw JSON
-                    service_account_info = json.loads(sa_json)
+                    parsed = json.loads(sa_json)
+                    if isinstance(parsed, str):
+                        parsed = json.loads(parsed)
+                    service_account_info = parsed
             except Exception as e:
                 logger.error(f"Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON environment variable: {e}")
 
