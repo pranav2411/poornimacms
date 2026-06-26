@@ -56,7 +56,10 @@ def init_fcm() -> bool:
     if _fcm_initialized:
         return True
 
-    load_dotenv(override=True)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_dir = os.path.dirname(os.path.dirname(current_dir))
+    dotenv_path = os.path.join(backend_dir, ".env")
+    load_dotenv(dotenv_path, override=True)
 
     with _fcm_lock:
         if _fcm_initialized:

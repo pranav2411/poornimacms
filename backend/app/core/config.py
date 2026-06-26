@@ -7,6 +7,13 @@ from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
 
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(os.path.dirname(current_dir))
+dotenv_path = os.path.join(backend_dir, ".env")
+
+
 class Settings(BaseSettings):
     environment: str = "development"
     allowed_origins: str = Field(
@@ -19,7 +26,7 @@ class Settings(BaseSettings):
     otp_ttl_minutes: int = 10
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=dotenv_path,
         case_sensitive=True,
         extra="ignore",
     )
