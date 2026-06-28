@@ -45,6 +45,40 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient();
 
+    // Resolve organization context from superadmin session
+    const orgId = session.user.organizationId;
+    if (!orgId) {
+      return NextResponse.json(
+        { error: "Superadmin session is missing organization context" },
+        { status: 400 }
+      );
+    }
+
+    // Get organization short code
+    const { data: orgData, error: orgError } = await supabase
+      .from("organizations")
+      .select("code")
+      .eq("id", orgId)
+      .single();
+
+    if (orgError || !orgData) {
+      console.error("Error retrieving organization:", orgError);
+      return NextResponse.json({ error: "Failed to find organization code" }, { status: 404 });
+    }
+    const orgCode = orgData.code;
+
+    // Generate atomic USR sequence number
+    const { data: seqVal, error: seqError } = await supabase.rpc("get_next_sequence", {
+      p_org_id: orgId,
+      p_entity_type: "USR",
+    });
+
+    if (seqError) {
+      console.error("Error running get_next_sequence RPC:", seqError);
+      return NextResponse.json({ error: "Failed to generate user sequence ID" }, { status: 500 });
+    }
+    const userNo = `${orgCode}-USR-${String(seqVal).padStart(4, "0")}`;
+
     // Check if user with this email already exists
     const { data: existingUser, error: checkError } = await supabase
       .from("users")
@@ -70,6 +104,8 @@ export async function POST(request: Request) {
     const { data: newUser, error: insertError } = await supabase
       .from("users")
       .insert({
+        organization_id: orgId,
+        user_no: userNo,
         email: cleanedEmail,
         role: role === "superadmin" ? "super_admin" : role,
         name: defaultName,

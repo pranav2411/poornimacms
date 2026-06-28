@@ -16,13 +16,12 @@ export function LogoIcon({ className, size = 42, logoUrl }: { className?: string
 
   return (
     <div className={cn("relative flex items-center justify-center overflow-hidden bg-transparent", className)}>
-      <Image
+      <img
         src={logoSrc}
         alt="Organization Logo"
         width={size}
         height={size}
         className="object-contain rounded"
-        priority
       />
     </div>
   );
