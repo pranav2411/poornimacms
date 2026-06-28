@@ -165,3 +165,18 @@ def update_branding(
             status_code=500,
             detail=f"Database error updating branding config: {str(e)}"
         )
+
+
+@router.get("/code/{org_code}")
+def get_organization_by_code(org_code: str):
+    supabase = get_supabase()
+    resp = (
+        supabase.table("organizations")
+        .select("*")
+        .eq("code", org_code.strip().upper())
+        .limit(1)
+        .execute()
+    )
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return _serialize_org(resp.data[0])

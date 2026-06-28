@@ -508,7 +508,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const uid = useId();
   const [hasActiveSos, setHasActiveSos] = useState(false);
-  const { status } = useSession();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -589,8 +589,8 @@ export default function Sidebar({
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
         </div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted leading-normal">
-          <p>Poornima College Of Engineering</p>
-          <p className="mt-0.5">NAAC A+ (AUTONOMOUS)</p>
+          <p>{session?.user?.orgName || "Poornima College Of Engineering"}</p>
+          {!session?.user?.orgName && <p className="mt-0.5">NAAC A+ (AUTONOMOUS)</p>}
         </div>
       </div>
     </aside>

@@ -480,5 +480,8 @@ export const updateBranding = (payload: { name?: string; logoUrl?: string }, tok
     token,
   });
 
+export const getOrganizationByCode = (orgCode: string) =>
+  request<any>(`/organizations/code/${orgCode}`);
+
 
 

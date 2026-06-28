@@ -13,6 +13,7 @@ import {
   updateUserByFirebaseUid,
   getUserByEmail,
   updateUserById,
+  getOrganizationByCode,
 } from "@/lib/api";
 import Logo from "@/components/Logo";
 
@@ -150,15 +151,34 @@ function LoginPageContent() {
   const [state, setState] = useState<LoginState>("idle");
   const [message, setMessage] = useState<string | null>(null);
 
+  const [customOrgName, setCustomOrgName] = useState("Poornima College Of Engineering");
+  const [customLogoUrl, setCustomLogoUrl] = useState("/PCElogo.png");
+  const [customOrgCode, setCustomOrgCode] = useState("Poornima");
+
   useEffect(() => {
     const errorParam = searchParams.get("error");
     if (errorParam) {
       setState("error");
       if (errorParam === "AccessDenied") {
-        setMessage("Use your @poornima.org Google account to sign in, and ensure your account has not been denied.");
+        setMessage("Use your registered organization Google account to sign in, and ensure your account has not been denied.");
       } else {
         setMessage(`Sign-in failed: ${errorParam}`);
       }
+    }
+
+    const orgParam = searchParams.get("org");
+    if (orgParam) {
+      getOrganizationByCode(orgParam)
+        .then((org) => {
+          if (org) {
+            setCustomOrgName(org.name);
+            setCustomLogoUrl(org.logoUrl || "/PCElogo.png");
+            setCustomOrgCode(org.code);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load query org branding:", err);
+        });
     }
   }, [searchParams]);
 
@@ -313,9 +333,9 @@ function LoginPageContent() {
       <div className="absolute inset-0 bg-black/20" />
       <div className="relative z-10 flex w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_36px_96px_rgba(15,23,42,0.4)] lg:min-h-[620px] lg:flex-row">
         <div className="order-2 flex w-full flex-col justify-center px-10 py-12 lg:order-2 lg:w-1/2 lg:px-14">
-          <Logo />
+          <Logo logoUrl={customLogoUrl} orgCode={customOrgCode} />
           <h1 className="mt-6 text-3xl font-semibold text-slate-900 lg:text-4xl">
-            Welcome back to Poornima Complaint Management System
+            Welcome back to {customOrgName} Complaint Management System
           </h1>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-500">
             Keep campus complaints moving with the quickest possible resolution.
@@ -359,7 +379,7 @@ function LoginPageContent() {
             {state === "loading" ? "Connecting to Google..." : "Login with Google"}
           </button>
           <p className="mt-6 text-xs text-slate-500">
-            Only @poornima.org accounts are permitted.
+            Only authorized email accounts are permitted.
           </p>
         </div>
         <div className="relative order-1 h-72 w-full lg:order-1 lg:h-auto lg:w-1/2">
@@ -374,10 +394,10 @@ function LoginPageContent() {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/20 to-transparent" />
           <div className="absolute bottom-8 left-8 right-8 text-white">
             <p className="text-xl font-semibold leading-snug">
-              Poornima College Of Engineering
+              {customOrgName}
             </p>
             <p className="mt-3 text-sm text-white/80">
-              NAAC A+ (AUTONOMOUS)
+              {customOrgName === "Poornima College Of Engineering" ? "NAAC A+ (AUTONOMOUS)" : "Complaint Management System"}
             </p>
           </div>
         </div>

@@ -245,7 +245,7 @@ export default function DashboardShell({
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-xs truncate">
-                  Poornima College Of Engineering
+                  {session?.user?.orgName || "Poornima College Of Engineering"}
                 </p>
                 <h1 className="text-lg font-semibold text-heading sm:text-xl truncate">{title}</h1>
                 {subtitle && <p className="text-xs text-muted sm:text-sm truncate">{subtitle}</p>}
