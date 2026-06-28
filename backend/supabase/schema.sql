@@ -28,18 +28,6 @@ CREATE TABLE departments (
   UNIQUE(organization_id, name)
 );
 
-CREATE TABLE department_admins (
-  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-  admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  PRIMARY KEY (department_id, admin_id)
-);
-
-CREATE TABLE department_vendors (
-  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-  vendor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  PRIMARY KEY (department_id, vendor_id)
-);
-
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -57,6 +45,18 @@ CREATE TABLE users (
   status VARCHAR(30) DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE department_admins (
+  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (department_id, admin_id)
+);
+
+CREATE TABLE department_vendors (
+  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  vendor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (department_id, vendor_id)
 );
 
 CREATE TABLE complaints (
