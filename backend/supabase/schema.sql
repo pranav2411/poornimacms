@@ -25,6 +25,8 @@ CREATE TABLE departments (
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   head_user_id UUID NOT NULL,
+  description TEXT NULL,
+  created_by UUID NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(organization_id, name)
 );
@@ -151,6 +153,12 @@ ALTER TABLE departments
 ADD CONSTRAINT fk_department_head
 FOREIGN KEY (head_user_id)
 REFERENCES users(id);
+
+ALTER TABLE departments
+ADD CONSTRAINT fk_department_creator
+FOREIGN KEY (created_by)
+REFERENCES users(id)
+ON DELETE SET NULL;
 
 ALTER TABLE complaints
 ADD CONSTRAINT fk_complaint_department
