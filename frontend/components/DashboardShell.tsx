@@ -13,6 +13,7 @@ import type { UserRole } from "@/lib/role-context";
 import { LogoIcon } from "@/components/Logo";
 import SosFloatingButton from "@/components/SosFloatingButton";
 import SupportModal from "@/components/SupportModal";
+import { unregisterFCMToken } from "@/lib/api";
 
 export default function DashboardShell({
   role,
@@ -137,9 +138,21 @@ export default function DashboardShell({
     };
   }, [menuOpen]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setMenuOpen(false);
     setIsLoggingOut(true);
+    try {
+      const userId = session?.user?.id;
+      if (userId) {
+        const token = window.localStorage.getItem(`fcm_token_${userId}`);
+        if (token) {
+          await unregisterFCMToken(token);
+          window.localStorage.removeItem(`fcm_token_${userId}`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to unregister FCM token during logout:", err);
+    }
     window.localStorage.removeItem("poornima-user");
     void firebaseSignOut(getFirebaseAuth()).finally(() => {
       void signOut({ callbackUrl: "/login" });

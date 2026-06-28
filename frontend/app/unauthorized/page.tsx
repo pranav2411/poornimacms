@@ -1,21 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import SupportModal from "@/components/SupportModal";
+import { unregisterFCMToken } from "@/lib/api";
 
 export default function UnauthorizedPage() {
+  const { data: session } = useSession();
   const [showHelp, setShowHelp] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLoggingOut(true);
     // Clear local storage user profile
     if (typeof window !== "undefined") {
+      try {
+        const userId = session?.user?.id;
+        if (userId) {
+          const token = window.localStorage.getItem(`fcm_token_${userId}`);
+          if (token) {
+            await unregisterFCMToken(token);
+            window.localStorage.removeItem(`fcm_token_${userId}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to unregister FCM token during logout:", err);
+      }
       window.localStorage.removeItem("poornima-user");
     }
     // Sign out of Firebase and NextAuth and redirect back to the login page

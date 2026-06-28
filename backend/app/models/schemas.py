@@ -183,3 +183,8 @@ class NotifyPendingUserRequest(BaseModel):
     name: str = Field(default="")
 
 
+class UnregisterFCMTokenRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+
+
+

@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Query, HTTPException, Depends, status
 
 from app.db.supabase import get_supabase
-from app.models.schemas import NotificationItem, RegisterFCMTokenRequest
+from app.models.schemas import NotificationItem, RegisterFCMTokenRequest, UnregisterFCMTokenRequest
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -193,3 +193,25 @@ def register_fcm_token(
         )
 
     return {"status": "success"}
+
+
+@router.post("/unregister-token")
+def unregister_fcm_token(
+    payload: UnregisterFCMTokenRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    supabase = get_supabase()
+    token_clean = payload.token.strip()
+    if not token_clean:
+        raise HTTPException(status_code=400, detail="Token cannot be empty")
+
+    try:
+        supabase.table("fcm_tokens").delete().eq("token", token_clean).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error unregistering token: {str(e)}"
+        )
+
+    return {"status": "success"}
+

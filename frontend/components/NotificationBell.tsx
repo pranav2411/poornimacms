@@ -49,33 +49,6 @@ export default function NotificationBell() {
                   : "New system update received.",
                 variant: isSos ? "destructive" : "default",
               });
-
-              // 2. Trigger native Chrome notification pop-up
-              if (
-                typeof window !== "undefined" &&
-                "Notification" in window &&
-                Notification.permission === "granted"
-              ) {
-                const notifTitle = isSos ? "🚨 SOS ALERT" : "Poornima CMS Update";
-                const options = {
-                  body: item.title,
-                  icon: "/PCElogo.png",
-                  badge: "/PCElogo.png",
-                  vibrate: [200, 100, 200],
-                };
-
-                if ("serviceWorker" in navigator) {
-                  navigator.serviceWorker.ready
-                    .then((registration) => {
-                      registration.showNotification(notifTitle, options);
-                    })
-                    .catch(() => {
-                      new Notification(notifTitle, options);
-                    });
-                } else {
-                  new Notification(notifTitle, options);
-                }
-              }
             }
           }
         });

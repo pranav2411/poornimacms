@@ -11,39 +11,38 @@ self.addEventListener('activate', (event) => {
 });
 
 firebase.initializeApp({
-  apiKey: "AIzaSyBb9JDMLqtqWFG2BdTFogNx_W8T7laJR3Q",
-  authDomain: "poornimacms.firebaseapp.com",
-  projectId: "poornimacms",
-  appId: "1:207036150574:web:5783b6615c4330885800bf",
-  messagingSenderId: "207036150574"
+  apiKey: "AIzaSyCsYlCmkAAYDO_7BOPAsckp9ky0JclVtyM",
+  authDomain: "poornimacms-4d082.firebaseapp.com",
+  projectId: "poornimacms-4d082",
+  appId: "1:452642564279:web:94477cb6754f7c4364c532",
+  messagingSenderId: "452642564279"
 });
 
 const messaging = firebase.messaging();
 
 // ─── Background message handler ────────────────────────────────────────────
 // Fires when the app is in the background / tab is closed.
-// The Notification API here creates the system-level notification that
-// appears in Chrome's notification panel (and the Android notification shade).
+// We only display a notification manually if the payload does NOT contain
+// a "notification" property (data-only payload). If a "notification" key is
+// present, the Firebase SDK automatically displays it, avoiding duplicates.
 messaging.onBackgroundMessage((payload) => {
-  const notificationTitle = payload.notification?.title || 'Poornima CMS Alert';
-  const link =
-    payload.data?.link ||
-    payload.notification?.click_action ||
-    payload.fcmOptions?.link ||
-    '/';
+  console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-  const rawBody = payload.notification?.body || '';
+  if (payload.notification) {
+    return;
+  }
+
+  const notificationTitle = payload.data?.title || 'Poornima CMS Alert';
+  const link = payload.data?.link || '/';
+  const rawBody = payload.data?.body || '';
   const cleanBody = rawBody.replace(/\s*\[SOS_ID:[a-fA-F0-9\-]+\]/, '').trim();
 
   const notificationOptions = {
     body: cleanBody,
     icon: self.location.origin + '/PCElogo.png',
     badge: self.location.origin + '/PCElogo.png',
-    // Using a unique tag per-message prevents stacking identical toasts
     tag: 'pcms-' + Date.now(),
-    // requireInteraction keeps it visible until user acts (desktop Chrome)
     requireInteraction: true,
-    // vibrate pattern for Android
     vibrate: [200, 100, 200],
     data: { link },
   };
@@ -51,12 +50,25 @@ messaging.onBackgroundMessage((payload) => {
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
+// Helper to extract the redirection link from various Firebase payload structures
+function getLinkFromNotification(notification) {
+  const data = notification?.data;
+  if (!data) return '/';
+  
+  if (data.link) return data.link;
+  if (data.data?.link) return data.data.link;
+  if (data.FCM_MSG?.data?.link) return data.FCM_MSG.data.link;
+  if (data.notification?.click_action) return data.notification.click_action;
+  
+  return '/';
+}
+
 // ─── Notification click handler ─────────────────────────────────────────────
 // Fires on desktop Chrome AND Android Chrome when the user taps the notification.
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
 
-  const link = event.notification.data?.link || '/';
+  const link = getLinkFromNotification(event.notification);
 
   event.waitUntil(
     clients
@@ -72,41 +84,5 @@ self.addEventListener('notificationclick', function (event) {
         // Otherwise open a new window
         return clients.openWindow(link);
       })
-  );
-});
-
-// ─── Push event fallback ────────────────────────────────────────────────────
-// Some browsers (Samsung Internet, older Android WebView) fire 'push' directly
-// and may not go through onBackgroundMessage. This acts as a safety net.
-self.addEventListener('push', function (event) {
-  // If Firebase already handled it, it won't reach here.
-  // This fires only if the Firebase SDK didn't intercept.
-  if (!event.data) return;
-
-  let title = 'Poornima CMS Alert';
-  let body = '';
-  let link = '/';
-
-  try {
-    const data = event.data.json();
-    title = data?.notification?.title || title;
-    body = data?.notification?.body || body;
-    link = data?.data?.link || data?.notification?.click_action || link;
-  } catch {
-    body = event.data.text();
-  }
-
-  const cleanBody = body.replace(/\s*\[SOS_ID:[a-fA-F0-9\-]+\]/, '').trim();
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: cleanBody,
-      icon: self.location.origin + '/PCElogo.png',
-      badge: self.location.origin + '/PCElogo.png',
-      tag: 'pcms-fallback-' + Date.now(),
-      requireInteraction: true,
-      vibrate: [200, 100, 200],
-      data: { link },
-    })
   );
 });

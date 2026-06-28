@@ -185,6 +185,18 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
     except Exception:
         pass
 
+    # Determine custom link if present in data
+    link_path = "/login"
+    if data and "link" in data:
+        link_path = data["link"]
+    
+    if not link_path.startswith("http"):
+        base_clean = base_url.rstrip("/")
+        path_clean = link_path.lstrip("/")
+        full_link = f"{base_clean}/{path_clean}"
+    else:
+        full_link = link_path
+
     webpush_config = messaging.WebpushConfig(
         notification=messaging.WebpushNotification(
             title=title,
@@ -193,7 +205,7 @@ def send_fcm_notification(tokens: List[str], title: str, body: str, data: Option
             badge=f"{base_url}/PCElogo.png",
         ),
         fcm_options=messaging.WebpushFCMOptions(
-            link=f"{base_url}/login"
+            link=full_link
         )
     )
 

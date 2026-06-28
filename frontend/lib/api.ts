@@ -452,4 +452,11 @@ export const registerFCMToken = (userId: string, token: string) =>
     body: { userId, token },
   });
 
+export const unregisterFCMToken = (token: string) =>
+  request<{ status: string }>("/notifications/unregister-token", {
+    method: "POST",
+    body: { token },
+  });
+
+
 
