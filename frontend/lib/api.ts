@@ -458,5 +458,27 @@ export const unregisterFCMToken = (token: string) =>
     body: { token },
   });
 
+export const registerOrganization = (payload: {
+  orgName: string;
+  orgCode: string;
+  adminName: string;
+  adminEmail: string;
+  firebaseUid: string;
+}) =>
+  request<any>("/organizations/register", {
+    method: "POST",
+    body: payload,
+  });
+
+export const getOrganizationById = (orgId: string, token?: string) =>
+  request<any>(`/organizations/id/${orgId}`, { token });
+
+export const updateBranding = (payload: { name?: string; logoUrl?: string }, token?: string) =>
+  request<any>("/organizations/branding", {
+    method: "PATCH",
+    body: payload,
+    token,
+  });
+
 
 

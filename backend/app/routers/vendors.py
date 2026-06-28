@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends, status
 from app.db.supabase import get_supabase
 from app.models.schemas import VendorItem, AddVendorRequest
 from app.core.security import get_current_user, require_roles
+from app.core.sequence import generate_prefixed_no
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,16 @@ def list_vendors(
                     "departmentId": department_id
                 })
     else:
-        # List all users with role = 'vendor' (Only allowed for super admin)
-        response = supabase.table("users").select("id, name, email").eq("role", "vendor").order("name").execute()
+        # List all users with role = 'vendor' (Only allowed for super admin / admin within organization)
+        org_id = current_user.get("organization_id")
+        response = (
+            supabase.table("users")
+            .select("id, name, email")
+            .eq("role", "vendor")
+            .eq("organization_id", org_id)
+            .order("name")
+            .execute()
+        )
         data = [
             {
                 "id": item["id"],
@@ -138,6 +147,12 @@ def add_vendor(
 
     supabase = get_supabase()
     email_clean = payload.email.strip().lower()
+    org_id = current_user.get("organization_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User profile has no associated organization context"
+        )
 
     # check if user already exists
     existing = (
@@ -149,6 +164,12 @@ def add_vendor(
     )
     if existing.data:
         user = existing.data[0]
+        if user.get("organization_id") != org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot update user profile belonging to another organization"
+            )
+
         # Update user to be a vendor
         updated = (
             supabase.table("users")
@@ -173,10 +194,19 @@ def add_vendor(
         vendor_email = user.get("email")
     else:
         # Create a new vendor user
-        import datetime
+        org_code = current_user.get("org_code")
+        if not org_code:
+            org_resp = supabase.table("organizations").select("code").eq("id", org_id).limit(1).execute()
+            if not org_resp.data:
+                raise HTTPException(status_code=404, detail="Organization not found")
+            org_code = org_resp.data[0]["code"]
+
+        user_no = generate_prefixed_no(supabase, org_id, org_code, "USR")
 
         stub = {
-            "firebase_uid": f"vendor-{email_clean.split('@')[0]}-{int(datetime.datetime.now().timestamp())}",
+            "organization_id": org_id,
+            "user_no": user_no,
+            "firebase_uid": f"vendor-{email_clean.split('@')[0]}-{int(datetime.now().timestamp())}",
             "name": payload.name,
             "email": email_clean,
             "role": "vendor",

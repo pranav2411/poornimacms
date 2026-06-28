@@ -57,6 +57,15 @@ def get_stats(
     supabase = get_supabase()
     # use new complaint statuses from production schema
     query = supabase.table("complaints").select("status, created_at, resolved_at")
+    if current_user.get("firebase_uid") != "__system__":
+        org_id = current_user.get("organization_id")
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User profile has no associated organization context"
+            )
     if created_by:
         query = query.eq("created_by", created_by)
     if department_id:

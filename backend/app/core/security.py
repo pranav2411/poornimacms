@@ -61,28 +61,27 @@ def get_current_user(
             detail="Token payload is missing user ID (uid)"
         )
 
-    # 3. Retrieve user profile from Supabase database
+    # 3. Retrieve user profile from Supabase database along with organization code
     supabase = get_supabase()
-    response = supabase.table("users").select("*").eq("firebase_uid", firebase_uid).limit(1).execute()
+    response = supabase.table("users").select("*, organizations(code)").eq("firebase_uid", firebase_uid).limit(1).execute()
     users = response.data or []
     
     if not users:
         # Fallback: Check if a user row exists with the same email but has a different or empty firebase_uid
         email = decoded_token.get("email")
         if email:
-            email_resp = supabase.table("users").select("*").eq("email", email).limit(1).execute()
+            email_resp = supabase.table("users").select("*, organizations(code)").eq("email", email).limit(1).execute()
             email_users = email_resp.data or []
             if email_users:
                 user = email_users[0]
                 # Auto-link the firebase_uid in the database
                 supabase.table("users").update({"firebase_uid": firebase_uid}).eq("id", user["id"]).execute()
                 # Reload the user row
-                response = supabase.table("users").select("*").eq("id", user["id"]).limit(1).execute()
+                response = supabase.table("users").select("*, organizations(code)").eq("id", user["id"]).limit(1).execute()
                 users = response.data or []
 
     if not users:
         # User is authenticated in Firebase but does not exist in our database yet
-        # Return a shell object with db_registered = False to allow registration routes
         return {
             "id": None,
             "firebase_uid": firebase_uid,
@@ -91,6 +90,8 @@ def get_current_user(
             "role": None,
             "is_verified": False,
             "is_active": True,
+            "organization_id": None,
+            "org_code": None,
             "db_registered": False
         }
 
@@ -102,6 +103,10 @@ def get_current_user(
             detail="User account is deactivated"
         )
 
+    # Resolve org_code from the embedded organizations join object
+    org_obj = user.get("organizations") or {}
+    org_code = org_obj.get("code")
+
     return {
         "id": user.get("id"),
         "firebase_uid": firebase_uid,
@@ -110,6 +115,8 @@ def get_current_user(
         "role": user.get("role"),
         "is_verified": bool(user.get("is_verified") or user.get("status") == "verified"),
         "is_active": bool(user.get("is_active", True)),
+        "organization_id": user.get("organization_id"),
+        "org_code": org_code,
         "department_id": user.get("department_id"),
         "db_registered": True
     }

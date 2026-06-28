@@ -37,6 +37,7 @@ const navConfig: Record<UserRole, Array<{ label: string; href: string }>> = {
     { label: "Reports", href: "/dashboard/superadmin/reports" },
     { label: "Analytics", href: "/dashboard/superadmin/analytics" },
     { label: "SOS History", href: "/dashboard/superadmin/sos" },
+    { label: "Branding Settings", href: "/dashboard/superadmin/branding" },
   ],
 };
 

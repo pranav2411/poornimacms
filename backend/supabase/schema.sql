@@ -3,15 +3,47 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(150) UNIQUE NOT NULL,
+  code VARCHAR(10) UNIQUE NOT NULL,
+  logo_url TEXT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE organization_sequences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  entity_type VARCHAR(30) NOT NULL, -- 'USR', 'NTF', 'CMP'
+  last_value INT DEFAULT 0,
+  UNIQUE(organization_id, entity_type)
+);
+
 CREATE TABLE departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) UNIQUE NOT NULL,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
   head_user_id UUID NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(organization_id, name)
+);
+
+CREATE TABLE department_admins (
+  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (department_id, admin_id)
+);
+
+CREATE TABLE department_vendors (
+  department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  vendor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (department_id, vendor_id)
 );
 
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  user_no VARCHAR(50) UNIQUE NOT NULL,
   firebase_uid VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(150) NOT NULL,
   avatar_url TEXT NULL,
@@ -29,6 +61,7 @@ CREATE TABLE users (
 
 CREATE TABLE complaints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   complaint_no VARCHAR(30) UNIQUE NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
@@ -86,6 +119,8 @@ CREATE TABLE complaint_status_history (
 
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  notification_no VARCHAR(50) UNIQUE NOT NULL,
   user_id UUID NOT NULL,
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
@@ -95,6 +130,7 @@ CREATE TABLE notifications (
 
 CREATE TABLE sos_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   triggered_by UUID NOT NULL,
   location TEXT,
   message TEXT,
@@ -233,4 +269,22 @@ CREATE TABLE IF NOT EXISTS fcm_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fcm_tokens_user ON fcm_tokens(user_id);
+
+
+-- Stored Function for Atomic Sequence Generation
+CREATE OR REPLACE FUNCTION get_next_sequence(p_org_id UUID, p_entity_type VARCHAR)
+RETURNS INT AS $$
+DECLARE
+  v_seq INT;
+BEGIN
+  INSERT INTO organization_sequences (organization_id, entity_type, last_value)
+  VALUES (p_org_id, p_entity_type, 1)
+  ON CONFLICT (organization_id, entity_type)
+  DO UPDATE SET last_value = organization_sequences.last_value + 1
+  RETURNING last_value INTO v_seq;
+  
+  RETURN v_seq;
+END;
+$$ LANGUAGE plpgsql;
+
 

@@ -9,6 +9,9 @@ declare module "next-auth" {
       role: "superadmin" | "admin" | "faculty" | "vendor" | null;
       status: "pending" | "verified" | "denied";
       departmentId?: string | null;
+      organizationId?: string | null;
+      orgCode?: string | null;
+      orgLogoUrl?: string | null;
     } & DefaultSession["user"];
   }
 
@@ -17,6 +20,9 @@ declare module "next-auth" {
     role?: "superadmin" | "admin" | "faculty" | "vendor" | null;
     status?: "pending" | "verified" | "denied";
     departmentId?: string | null;
+    organizationId?: string | null;
+    orgCode?: string | null;
+    orgLogoUrl?: string | null;
   }
 }
 
@@ -52,7 +58,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return false;
       }
 
-      // Enforce Poornima campus emails only
+      // Enforce allowed email domains
       if (!user.email.toLowerCase().endsWith("@poornima.org") && !user.email.toLowerCase().endsWith("@gmail.com")) {
         return false;
       }
@@ -72,38 +78,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         if (!dbUser) {
-          // INSERT new user with pending status and null role
-          const { error: insertError } = await supabase.from("users").insert({
-            email: user.email,
-            name: user.name || "",
-            avatar_url: user.image || "",
-            role: null,
-            status: "pending",
-            is_verified: false,
-            is_active: true,
-          });
-
-          if (insertError) {
-            console.error("Failed to insert new user in signIn callback:", insertError);
-            return false;
-          }
-
-          // Notify backend of new pending user so push notifications are dispatched to superadmins
-          try {
-            const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
-            fetch(`${apiBase}/users/notify-pending`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: user.email,
-                name: user.name || "",
-              }),
-            }).catch((err) => console.error("Failed to post notify-pending asynchronously:", err));
-          } catch (e) {
-            console.error("Failed to notify backend of pending user:", e);
-          }
-
-          return true;
+          // Reject sign-in for unknown/uninvited users to enforce tenant boundaries.
+          // They must register an organization first via the /register-org page.
+          return false;
         }
 
         if (dbUser.status === "denied") {
@@ -137,7 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const supabase = createAdminClient();
         const { data: dbUser, error } = await supabase
           .from("users")
-          .select("id, name, role, status, department_id, avatar_url")
+          .select("id, name, role, status, department_id, avatar_url, organization_id, organizations(code, logo_url)")
           .eq("email", token.email)
           .single();
 
@@ -148,6 +125,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.role = dbUser.role === "super_admin" ? "superadmin" : dbUser.role;
           token.status = dbUser.status;
           token.departmentId = dbUser.department_id;
+          token.organizationId = dbUser.organization_id;
+          token.orgCode = (dbUser as any).organizations?.code || null;
+          token.orgLogoUrl = (dbUser as any).organizations?.logo_url || null;
           token.lastChecked = now;
         }
       }
@@ -160,6 +140,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as any;
         session.user.status = token.status as any;
         session.user.departmentId = token.departmentId as string;
+        session.user.organizationId = token.organizationId as string;
+        session.user.orgCode = token.orgCode as string;
+        session.user.orgLogoUrl = token.orgLogoUrl as string;
         if (token.name) session.user.name = token.name as string;
         if (token.picture) session.user.image = token.picture as string;
       }

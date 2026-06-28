@@ -114,9 +114,12 @@ def _serialize_complaint(
     }
 
 
-def _get_complaint_row(complaint_no: str) -> Dict[str, Any]:
+def _get_complaint_row(complaint_no: str, org_id: Optional[str] = None) -> Dict[str, Any]:
     supabase = get_supabase()
-    resp = supabase.table("complaints").select("*").eq("complaint_no", complaint_no).limit(1).execute()
+    query = supabase.table("complaints").select("*").eq("complaint_no", complaint_no)
+    if org_id:
+        query = query.eq("organization_id", org_id)
+    resp = query.limit(1).execute()
     data = resp.data or []
     if not data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
@@ -171,34 +174,9 @@ def _get_complaint_row(complaint_no: str) -> Dict[str, Any]:
     }
 
 
-def _generate_complaint_no() -> str:
-    supabase = get_supabase()
-    now = datetime.now(timezone.utc)
-    year = now.year
-    
-    try:
-        # Fetch complaints for this year to determine the next sequential number
-        resp = supabase.table("complaints").select("complaint_no").ilike("complaint_no", f"CMP-{year}-%").execute()
-        existing_nos = []
-        for row in (resp.data or []):
-            parts = row["complaint_no"].split("-")
-            if len(parts) == 3:
-                try:
-                    existing_nos.append(int(parts[2]))
-                except ValueError:
-                    pass
-        next_no = max(existing_nos) + 1 if existing_nos else 1
-    except Exception:
-        next_no = 1
-
-    for _ in range(10):
-        code = f"CMP-{year}-{next_no:06d}"
-        existing = supabase.table("complaints").select("id").eq("complaint_no", code).limit(1).execute()
-        if not existing.data:
-            return code
-        next_no += 1
-        
-    raise HTTPException(status_code=500, detail="Unable to allocate complaint number")
+def _generate_complaint_no(supabase, org_id: str, org_code: str) -> str:
+    from app.core.sequence import generate_prefixed_no
+    return generate_prefixed_no(supabase, org_id, org_code, "CMP")
 
 
 @router.get("", response_model=List[Complaint])
@@ -238,6 +216,16 @@ def list_complaints(
 
     supabase = get_supabase()
     query = supabase.table("complaints").select("*").order("updated_at", desc=True)
+    
+    if current_user.get("firebase_uid") != "__system__":
+        org_id = current_user.get("organization_id")
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User profile has no associated organization context"
+            )
     if department_id:
         query = query.eq("department_id", department_id)
     if status_filter:
@@ -617,7 +605,7 @@ def list_reports(
 
 @router.get("/{complaint_no}", response_model=Complaint)
 def get_complaint(complaint_no: str, current_user: dict = Depends(get_current_user)) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     row = info["row"]
     
     role = current_user.get("role")
@@ -657,7 +645,6 @@ def create_complaint(
 
     supabase = get_supabase()
     now = _now_iso()
-    complaint_no = _generate_complaint_no()
 
     system_user_id = _get_system_user_id(supabase)
     dept = _get_department(supabase, payload.departmentId)
@@ -669,7 +656,29 @@ def create_complaint(
     except ValueError:
         created_by_uuid = system_user_id
 
+    org_id = current_user.get("organization_id")
+    if not org_id and current_user.get("firebase_uid") == "__system__":
+        creator_resp = supabase.table("users").select("organization_id").eq("id", created_by_uuid).limit(1).execute()
+        if creator_resp.data:
+            org_id = creator_resp.data[0].get("organization_id")
+            
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not resolve organization context for complaint"
+        )
+
+    org_resp = supabase.table("organizations").select("code").eq("id", org_id).limit(1).execute()
+    if not org_resp.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found"
+        )
+    org_code = org_resp.data[0]["code"]
+
+    complaint_no = _generate_complaint_no(supabase, org_id, org_code)
     insert_payload = {
+        "organization_id": org_id,
         "complaint_no": complaint_no,
         "title": payload.title,
         "description": payload.description,
@@ -717,7 +726,7 @@ def create_complaint(
         data={"type": "new_complaint", "complaintNo": complaint_no}
     )
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -736,7 +745,7 @@ def assign_vendor(
     payload: AssignVendorRequest, 
     current_user: dict = Depends(require_roles(["admin"]))
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     if not is_super:
         if info["row"].get("department_id") != current_user.get("department_id"):
@@ -793,7 +802,7 @@ def assign_vendor(
         "changed_by": current_user.get("id") or system_user_id,
     }).execute()
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
 
     # Send push notifications
     # 1. Notify Assigned Vendor (new work assigned)
@@ -832,7 +841,7 @@ def mark_fixed(
     payload: Optional[MarkFixedRequest] = None, 
     current_user: dict = Depends(require_roles(["vendor", "admin"]))
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -877,7 +886,7 @@ def mark_fixed(
         "changed_by": system_user_id,
     }).execute()
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
 
     # Notify Creator / Faculty (status update)
     creator_id = info["row"].get("created_by")
@@ -906,7 +915,7 @@ def verify_solution(
     complaint_no: str, 
     current_user: dict = Depends(get_current_user)
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -947,7 +956,7 @@ def verify_solution(
         "changed_by": system_user_id,
     }).execute()
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
 
     # Notify Creator / Faculty (status update)
     creator_id = info["row"].get("created_by")
@@ -976,7 +985,7 @@ def notify_vendor(
     complaint_no: str, 
     current_user: dict = Depends(require_roles(["admin"]))
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     if not is_super:
         if info["row"].get("department_id") != current_user.get("department_id"):
@@ -1015,7 +1024,7 @@ def close_complaint(
     payload: CloseComplaintRequest, 
     current_user: dict = Depends(get_current_user)
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -1057,7 +1066,7 @@ def close_complaint(
         "changed_by": system_user_id,
     }).execute()
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
 
     # Notify Creator / Faculty (status update)
     creator_id = info["row"].get("created_by")
@@ -1086,7 +1095,7 @@ def send_reminder(
     complaint_no: str, 
     current_user: dict = Depends(get_current_user)
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -1118,7 +1127,7 @@ def send_reminder(
             data={"type": "reminder", "complaintNo": complaint_no}
         )
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     return _serialize_complaint(
         info["row"],
         info["history"],
@@ -1137,7 +1146,7 @@ def report_issue(
     payload: ReportIssueRequest, 
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, str]:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -1254,7 +1263,7 @@ def request_vendor_change(
     payload: RequestVendorChangeRequest,
     current_user: dict = Depends(require_roles(["vendor"]))
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     complaint = info["row"]
     complaint_id = complaint["id"]
     assigned_vendor_id = complaint.get("assigned_vendor_id")
@@ -1325,7 +1334,7 @@ def request_vendor_change(
             data={"type": "vendor_change_request", "complaintNo": complaint_no}
         )
         
-    updated_info = _get_complaint_row(complaint_no)
+    updated_info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     return _serialize_complaint(
         updated_info["row"],
         updated_info["history"],
@@ -1343,7 +1352,7 @@ def delete_complaint(
     complaint_no: str, 
     current_user: dict = Depends(require_roles(["admin"]))
 ):
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -1371,7 +1380,7 @@ def update_complaint(
     payload: ComplaintUpdate, 
     current_user: dict = Depends(get_current_user)
 ) -> Complaint:
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
     
     if not is_super:
@@ -1442,7 +1451,7 @@ def update_complaint(
         "changed_by": system_user_id,
     }).execute()
 
-    info = _get_complaint_row(complaint_no)
+    info = _get_complaint_row(complaint_no, org_id=current_user.get('organization_id'))
     return _serialize_complaint(
         info["row"],
         info["history"],

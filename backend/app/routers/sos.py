@@ -28,14 +28,24 @@ def trigger_sos_alert(
             detail="Cannot trigger SOS alert for another user"
         )
 
-    # 1. Fetch user details to get their name
-    user_resp = supabase.table("users").select("id, name").eq("id", payload.triggeredBy).limit(1).execute()
+    # 1. Fetch user details to get their name and organization
+    user_resp = supabase.table("users").select("id, name, organization_id").eq("id", payload.triggeredBy).limit(1).execute()
     if not user_resp.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user_name = user_resp.data[0]["name"]
+    
+    user_data = user_resp.data[0]
+    user_name = user_data["name"]
+    org_id = user_data.get("organization_id")
+
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no associated organization context"
+        )
 
     # 2. Insert alert into the sos_alerts table
     sos_payload = {
+        "organization_id": org_id,
         "triggered_by": payload.triggeredBy,
         "location": payload.location or "Unknown Location",
         "message": f"[{payload.emergencyType.upper()}] {payload.description or ''}".strip(),
@@ -54,10 +64,11 @@ def trigger_sos_alert(
     alert_id = sos_resp.data[0]["id"]
     notif_message = f"Emergency triggered by {user_name}. Location: {payload.location or 'Unknown'}. Details: {payload.description or 'No details'} [SOS_ID:{alert_id}]"
 
-    # Send push notification to everyone (this will also write DB notifications for all active users)
+    # Send push notification to everyone in the same organization
     notify_all(
         title=notif_title,
         body=notif_message,
+        org_id=org_id,
         data={
             "type": "sos",
             "alertId": str(alert_id),
@@ -74,7 +85,19 @@ def get_sos_history(
     current_user: dict = Depends(get_current_user)
 ) -> List[SosAlertHistoryItem]:
     supabase = get_supabase()
-    resp = supabase.table("sos_alerts").select("*").order("created_at", desc=True).execute()
+    
+    query = supabase.table("sos_alerts").select("*")
+    if current_user.get("firebase_uid") != "__system__":
+        org_id = current_user.get("organization_id")
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User profile has no associated organization context"
+            )
+
+    resp = query.order("created_at", desc=True).execute()
     alerts = resp.data or []
     if not alerts:
         return []
@@ -114,7 +137,7 @@ def resolve_sos_alert(
 ):
     supabase = get_supabase()
     
-    # 1. Fetch the alert details first to match and delete notifications (both metadata tagged and older title-based ones)
+    # 1. Fetch the alert details first
     alert_resp = supabase.table("sos_alerts").select("*").eq("id", alert_id).limit(1).execute()
     if not alert_resp.data:
         raise HTTPException(
@@ -122,6 +145,14 @@ def resolve_sos_alert(
             detail="Alert not found or failed to resolve"
         )
     alert_data = alert_resp.data[0]
+
+    # Enforce organization scoping check
+    if current_user.get("firebase_uid") != "__system__":
+        if alert_data.get("organization_id") != current_user.get("organization_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot resolve alerts from other organizations"
+            )
 
     # Enforce access checks: only alert creator, admins, or superadmin can resolve
     is_super = current_user.get("role") == "super_admin" or current_user.get("firebase_uid") == "__system__"
@@ -149,7 +180,6 @@ def resolve_sos_alert(
         )
         
     # 3. Delete matching notifications from database
-    # Deleting via modern tag in message [SOS_ID:alert_id]
     supabase.table("notifications").delete().like("message", f"%[SOS_ID:{alert_id}]%").execute()
     
     # Deleting via fallback (title matching) for backwards compatibility

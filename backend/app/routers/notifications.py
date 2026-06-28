@@ -24,7 +24,19 @@ def list_notifications(
         user_id = current_user.get("id")
 
     supabase = get_supabase()
-    query = supabase.table("notifications").select("id, title, message, created_at")
+    query = supabase.table("notifications").select("id, organization_id, notification_no, title, message, created_at")
+    
+    # Scope by organization unless caller is system
+    if current_user.get("firebase_uid") != "__system__":
+        org_id = current_user.get("organization_id")
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User profile has no associated organization context"
+            )
+
     if user_id:
         query = query.eq("user_id", user_id)
     response = (
@@ -40,7 +52,10 @@ def list_notifications(
     filtered_data = []
     if has_sos:
         # Fetch SOS alerts to cross-reference their status
-        sos_resp = supabase.table("sos_alerts").select("id, status, message, location").execute()
+        sos_query = supabase.table("sos_alerts").select("id, status, message, location")
+        if current_user.get("firebase_uid") != "__system__" and current_user.get("organization_id"):
+            sos_query = sos_query.eq("organization_id", current_user.get("organization_id"))
+        sos_resp = sos_query.execute()
         sos_alerts = sos_resp.data or []
         
         resolved_ids = set()
@@ -64,7 +79,7 @@ def list_notifications(
             else:
                 emergency_type = "EMERGENCY"
                 description = msg
-
+ 
             loc = a.get("location") or "Unknown"
             locs = [loc]
             if loc == "Unknown Location":
@@ -112,10 +127,12 @@ def list_notifications(
             supabase.table("notifications").delete().in_("id", ids_to_delete).execute()
     else:
         filtered_data = raw_data
-
+ 
     return [
         {
             "id": item["id"],
+            "organizationId": item.get("organization_id") or "",
+            "notificationNo": item.get("notification_no") or "",
             "title": item["title"],
             "timestamp": item.get("created_at"),
         }

@@ -270,48 +270,90 @@ def send_fcm_notification_async(tokens: List[str], title: str, body: str, data: 
 
 # Helper routines for common workflows
 def notify_users(user_ids: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None):
-    if user_ids:
-        try:
-            supabase = get_supabase()
-            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
-            supabase.table("notifications").insert(inserts).execute()
-        except Exception as e:
-            logger.error(f"Error inserting DB notifications for users {user_ids}: {e}")
+    if not user_ids:
+        return
+        
+    try:
+        supabase = get_supabase()
+        
+        # 1. Resolve organization context from the first user
+        org_id = None
+        org_code = None
+        user_resp = (
+            supabase.table("users")
+            .select("organization_id, organizations(code)")
+            .eq("id", user_ids[0])
+            .limit(1)
+            .execute()
+        )
+        if user_resp.data:
+            org_id = user_resp.data[0].get("organization_id")
+            org_obj = user_resp.data[0].get("organizations") or {}
+            org_code = org_obj.get("code")
+            
+        if not org_id or not org_code:
+            logger.error(f"FCM: Could not resolve organization context for users {user_ids}")
+            return
+
+        # 2. Insert notifications with org scoping and custom prefix sequence
+        from app.core.sequence import generate_prefixed_no
+        inserts = []
+        for uid in user_ids:
+            notif_no = generate_prefixed_no(supabase, org_id, org_code, "NTF")
+            inserts.append({
+                "organization_id": org_id,
+                "notification_no": notif_no,
+                "user_id": uid,
+                "title": title,
+                "message": body
+            })
+            
+        supabase.table("notifications").insert(inserts).execute()
+    except Exception as e:
+        logger.error(f"Error inserting DB notifications for users {user_ids}: {e}")
 
     tokens = get_tokens_for_users(user_ids)
     if tokens:
         send_fcm_notification_async(tokens, title, body, data)
 
 
-def notify_role(role: str, title: str, body: str, data: Optional[Dict[str, str]] = None):
+def notify_role(role: str, title: str, body: str, org_id: Optional[str] = None, data: Optional[Dict[str, str]] = None):
+    if not org_id:
+        logger.error(f"FCM: org_id is required to notify role {role}")
+        return
+        
     try:
         supabase = get_supabase()
-        # Find user IDs with this role
-        users_resp = supabase.table("users").select("id").eq("role", role).execute()
+        users_resp = (
+            supabase.table("users")
+            .select("id")
+            .eq("role", role)
+            .eq("organization_id", org_id)
+            .execute()
+        )
         user_ids = [u["id"] for u in (users_resp.data or [])]
         if user_ids:
-            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
-            supabase.table("notifications").insert(inserts).execute()
+            notify_users(user_ids, title, body, data)
     except Exception as e:
         logger.error(f"Error inserting DB notifications for role {role}: {e}")
 
-    tokens = get_tokens_for_role(role)
-    if tokens:
-        send_fcm_notification_async(tokens, title, body, data)
 
-
-def notify_all(title: str, body: str, data: Optional[Dict[str, str]] = None):
+def notify_all(title: str, body: str, org_id: Optional[str] = None, data: Optional[Dict[str, str]] = None):
+    if not org_id:
+        logger.error("FCM: org_id is required to notify all users")
+        return
+        
     try:
         supabase = get_supabase()
-        # Find all active users
-        users_resp = supabase.table("users").select("id").eq("is_active", True).execute()
+        users_resp = (
+            supabase.table("users")
+            .select("id")
+            .eq("is_active", True)
+            .eq("organization_id", org_id)
+            .execute()
+        )
         user_ids = [u["id"] for u in (users_resp.data or [])]
         if user_ids:
-            inserts = [{"user_id": uid, "title": title, "message": body} for uid in user_ids]
-            supabase.table("notifications").insert(inserts).execute()
+            notify_users(user_ids, title, body, data)
     except Exception as e:
         logger.error(f"Error inserting DB notifications for all users: {e}")
-
-    tokens = get_all_tokens()
-    if tokens:
-        send_fcm_notification_async(tokens, title, body, data)

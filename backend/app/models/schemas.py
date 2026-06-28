@@ -99,8 +99,32 @@ class StatsResponse(BaseModel):
 
 class NotificationItem(BaseModel):
     id: str
+    organizationId: str
+    notificationNo: str
     title: str
     timestamp: str
+
+
+class Organization(BaseModel):
+    id: str
+    name: str
+    code: str
+    logoUrl: Optional[str] = None
+    createdAt: str
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(..., min_length=3, max_length=150)
+    code: str = Field(..., min_length=2, max_length=10)
+
+
+class OrganizationRegisterRequest(BaseModel):
+    orgName: str = Field(..., min_length=3, max_length=150)
+    orgCode: str = Field(..., min_length=2, max_length=10)
+    adminName: str = Field(..., min_length=2, max_length=150)
+    adminEmail: str = Field(..., min_length=5, max_length=255)
+    firebaseUid: str = Field(..., min_length=1, max_length=255)
+
 
 
 class VendorItem(BaseModel):
@@ -119,6 +143,8 @@ class AddVendorRequest(BaseModel):
 
 
 class UserCreate(BaseModel):
+    organizationId: Optional[str] = None
+    userNo: Optional[str] = None
     firebaseUid: Optional[str] = Field(default=None, max_length=255)
     name: Optional[str] = Field(default=None, max_length=150)
     avatarUrl: Optional[str] = Field(default=None, max_length=1000)
@@ -130,6 +156,8 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    organizationId: Optional[str] = None
+    userNo: Optional[str] = None
     firebaseUid: Optional[str] = Field(default=None, max_length=255)
     name: Optional[str] = Field(default=None, min_length=2, max_length=150)
     avatarUrl: Optional[str] = Field(default=None, max_length=1000)
@@ -142,6 +170,8 @@ class UserUpdate(BaseModel):
 
 class UserItem(BaseModel):
     id: str
+    organizationId: str
+    userNo: str
     firebaseUid: Optional[str] = None
     name: Optional[str] = None
     avatarUrl: Optional[str] = None
@@ -181,6 +211,7 @@ class RegisterFCMTokenRequest(BaseModel):
 class NotifyPendingUserRequest(BaseModel):
     email: str = Field(..., min_length=5)
     name: str = Field(default="")
+    organizationId: str = Field(..., min_length=1)
 
 
 class UnregisterFCMTokenRequest(BaseModel):
