@@ -106,14 +106,13 @@ export async function POST(request: Request) {
       .insert({
         organization_id: orgId,
         user_no: userNo,
+        firebase_uid: `stub-${cleanedEmail.split("@")[0]}-${Date.now()}`,
         email: cleanedEmail,
         role: role === "superadmin" ? "super_admin" : role,
         name: defaultName,
         status: "verified",
         is_verified: true, // Legacy compatibility
         is_active: true,
-        verified_at: new Date().toISOString(),
-        verified_by: session.user.id,
       })
       .select()
       .single();

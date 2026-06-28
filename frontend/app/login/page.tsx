@@ -117,10 +117,12 @@ async function syncUserProfile(user: any) {
     profile.name !== googleProfile.name ||
     profile.email !== googleProfile.email ||
     profile.avatarUrl !== googleProfile.avatarUrl ||
-    !profile.firebaseUid;
+    !profile.firebaseUid ||
+    profile.firebaseUid.startsWith("stub-") ||
+    profile.firebaseUid.startsWith("vendor-");
 
   if (needsRefresh) {
-    if (profile.firebaseUid) {
+    if (profile.firebaseUid && !profile.firebaseUid.startsWith("stub-") && !profile.firebaseUid.startsWith("vendor-")) {
       profile = await updateUserByFirebaseUid(profile.firebaseUid, {
         name: googleProfile.name,
         email: googleProfile.email,
