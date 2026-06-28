@@ -473,7 +473,7 @@ export const registerOrganization = (payload: {
 export const getOrganizationById = (orgId: string, token?: string) =>
   request<any>(`/organizations/id/${orgId}`, { token });
 
-export const updateBranding = (payload: { name?: string; logoUrl?: string }, token?: string) =>
+export const updateBranding = (payload: { name?: string; logoUrl?: string; bannerUrl?: string }, token?: string) =>
   request<any>("/organizations/branding", {
     method: "PATCH",
     body: payload,

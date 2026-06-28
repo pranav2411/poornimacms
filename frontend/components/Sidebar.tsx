@@ -578,15 +578,11 @@ export default function Sidebar({
       </div>
       <div className="flex flex-col gap-4">
         <div className="relative h-[72px] w-full overflow-hidden rounded-xl border border-border shadow-sm">
-          <Image
-            src="/loginpage.png"
-            alt="PCE Campus"
-            fill
-            sizes="(max-width: 1024px) 100vw, 208px"
-            className="object-cover transition-transform duration-300 hover:scale-105"
-            priority
+          <img
+            src={session?.user?.orgBannerUrl || "/loginpage.png"}
+            alt="Campus Banner"
+            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
         </div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted leading-normal">
           <p>{session?.user?.orgName || "Poornima College Of Engineering"}</p>

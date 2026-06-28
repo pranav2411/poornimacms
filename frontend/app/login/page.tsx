@@ -156,6 +156,7 @@ function LoginPageContent() {
   const [customOrgName, setCustomOrgName] = useState("Poornima College Of Engineering");
   const [customLogoUrl, setCustomLogoUrl] = useState("/PCElogo.png");
   const [customOrgCode, setCustomOrgCode] = useState("Poornima");
+  const [customBannerUrl, setCustomBannerUrl] = useState("/loginpage.png");
 
   useEffect(() => {
     const errorParam = searchParams.get("error");
@@ -176,6 +177,7 @@ function LoginPageContent() {
             setCustomOrgName(org.name);
             setCustomLogoUrl(org.logoUrl || "/PCElogo.png");
             setCustomOrgCode(org.code);
+            setCustomBannerUrl(org.bannerUrl || "/loginpage.png");
           }
         })
         .catch((err) => {
@@ -385,13 +387,10 @@ function LoginPageContent() {
           </p>
         </div>
         <div className="relative order-1 h-72 w-full lg:order-1 lg:h-auto lg:w-1/2">
-          <Image
-            src="/loginpage.png"
-            alt="Students collaborating"
-            fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-cover"
-            priority
+          <img
+            src={customBannerUrl}
+            alt="Campus Banner"
+            className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/20 to-transparent" />
           <div className="absolute bottom-8 left-8 right-8 text-white">

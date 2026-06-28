@@ -16,6 +16,7 @@ def _serialize_org(row: Dict[str, Any]) -> Dict[str, Any]:
         "name": row.get("name"),
         "code": row.get("code"),
         "logoUrl": row.get("logo_url"),
+        "bannerUrl": row.get("banner_url"),
         "createdAt": row.get("created_at"),
     }
 
@@ -146,6 +147,8 @@ def update_branding(
         update_payload["name"] = str(payload["name"]).strip()
     if "logoUrl" in payload:
         update_payload["logo_url"] = str(payload["logoUrl"]).strip()
+    if "bannerUrl" in payload:
+        update_payload["banner_url"] = str(payload["bannerUrl"]).strip()
 
     if not update_payload:
         raise HTTPException(status_code=400, detail="No valid update parameters provided")

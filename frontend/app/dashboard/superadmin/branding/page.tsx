@@ -14,6 +14,7 @@ export default function BrandingSettingsPage() {
   // Form Fields
   const [orgName, setOrgName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
   const [orgCode, setOrgCode] = useState("");
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function BrandingSettingsPage() {
         setOrgName(org.name);
         setOrgCode(org.code);
         setLogoUrl(org.logoUrl || "");
+        setBannerUrl(org.bannerUrl || "");
       } catch (err: any) {
         console.error("Failed to load organization branding details:", err);
         setError("Could not load organization configurations.");
@@ -55,14 +57,16 @@ export default function BrandingSettingsPage() {
       await updateBranding({
         name: orgName.trim(),
         logoUrl: logoUrl.trim() || undefined,
+        bannerUrl: bannerUrl.trim() || undefined,
       });
 
-      // 2. Refresh the next-auth session to update logo across the UI
+      // 2. Refresh the next-auth session to update logo/banner across the UI
       await updateSession({
         ...session,
         user: {
           ...session?.user,
           orgLogoUrl: logoUrl.trim() || null,
+          orgBannerUrl: bannerUrl.trim() || null,
         }
       });
 
@@ -160,20 +164,54 @@ export default function BrandingSettingsPage() {
             </p>
           </div>
 
-          {/* Preview */}
-          {logoUrl.trim() && (
-            <div className="p-4 rounded-lg bg-slate-950/40 border border-white/5 flex flex-col items-center gap-3">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Logo Preview</span>
-              <img
-                src={logoUrl}
-                alt="Logo Preview"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/PCElogo.png";
-                }}
-                className="h-16 w-16 object-contain rounded border border-white/10 p-1"
-              />
-            </div>
-          )}
+          {/* Banner URL */}
+          <div>
+            <label htmlFor="bannerUrl" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              Custom Dashboard/Login Banner (Image URL)
+            </label>
+            <input
+              id="bannerUrl"
+              type="url"
+              value={bannerUrl}
+              onChange={(e) => setBannerUrl(e.target.value)}
+              placeholder="e.g. https://domain.com/banner.png"
+              className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+            />
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Provide a link to a banner image (PNG/JPG). Displays on the login screen and sidebar footer.
+            </p>
+          </div>
+
+          {/* Preview Panel */}
+          <div className="flex gap-4">
+            {logoUrl.trim() && (
+              <div className="flex-1 p-4 rounded-lg bg-slate-950/40 border border-white/5 flex flex-col items-center gap-3">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Logo Preview</span>
+                <img
+                  src={logoUrl}
+                  alt="Logo Preview"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/PCElogo.png";
+                  }}
+                  className="h-16 w-16 object-contain rounded border border-white/10 p-1"
+                />
+              </div>
+            )}
+
+            {bannerUrl.trim() && (
+              <div className="flex-1 p-4 rounded-lg bg-slate-950/40 border border-white/5 flex flex-col items-center gap-3">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Banner Preview</span>
+                <img
+                  src={bannerUrl}
+                  alt="Banner Preview"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/loginpage.png";
+                  }}
+                  className="h-16 w-full object-cover rounded border border-white/10"
+                />
+              </div>
+            )}
+          </div>
 
           {/* Save Button */}
           <button

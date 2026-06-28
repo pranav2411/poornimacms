@@ -8,6 +8,7 @@ CREATE TABLE organizations (
   name VARCHAR(150) UNIQUE NOT NULL,
   code VARCHAR(10) UNIQUE NOT NULL,
   logo_url TEXT NULL,
+  banner_url TEXT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

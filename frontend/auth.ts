@@ -13,6 +13,7 @@ declare module "next-auth" {
       orgCode?: string | null;
       orgLogoUrl?: string | null;
       orgName?: string | null;
+      orgBannerUrl?: string | null;
     } & DefaultSession["user"];
   }
 
@@ -25,6 +26,7 @@ declare module "next-auth" {
     orgCode?: string | null;
     orgLogoUrl?: string | null;
     orgName?: string | null;
+    orgBannerUrl?: string | null;
   }
 }
 
@@ -116,7 +118,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const supabase = createAdminClient();
         const { data: dbUser, error } = await supabase
           .from("users")
-          .select("id, name, role, status, department_id, avatar_url, organization_id, organizations(code, logo_url, name)")
+          .select("id, name, role, status, department_id, avatar_url, organization_id, organizations(code, logo_url, name, banner_url)")
           .eq("email", token.email)
           .single();
 
@@ -131,6 +133,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.orgCode = (dbUser as any).organizations?.code || null;
           token.orgLogoUrl = (dbUser as any).organizations?.logo_url || null;
           token.orgName = (dbUser as any).organizations?.name || null;
+          token.orgBannerUrl = (dbUser as any).organizations?.banner_url || null;
           token.lastChecked = now;
         }
       }
@@ -147,6 +150,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.orgCode = token.orgCode as string;
         session.user.orgLogoUrl = token.orgLogoUrl as string;
         session.user.orgName = token.orgName as string;
+        session.user.orgBannerUrl = token.orgBannerUrl as string;
         if (token.name) session.user.name = token.name as string;
         if (token.picture) session.user.image = token.picture as string;
       }
