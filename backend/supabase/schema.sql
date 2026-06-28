@@ -22,6 +22,7 @@ CREATE TABLE users (
   department_id UUID NULL,
   is_verified BOOLEAN DEFAULT FALSE,
   is_active BOOLEAN DEFAULT TRUE,
+  status VARCHAR(30) DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
