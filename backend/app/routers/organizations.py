@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+import logging
 from fastapi import APIRouter, HTTPException, status, Depends
+
+logger = logging.getLogger(__name__)
 
 from app.db.supabase import get_supabase
 from app.models.schemas import Organization, OrganizationRegisterRequest
