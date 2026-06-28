@@ -164,6 +164,7 @@ def update_branding(
             raise HTTPException(status_code=404, detail="Organization not found")
         return _serialize_org(resp.data[0])
     except Exception as e:
+        logger.exception("Error updating branding config:")
         raise HTTPException(
             status_code=500,
             detail=f"Database error updating branding config: {str(e)}"
