@@ -41,6 +41,7 @@ export async function GET() {
           )
         )
       `)
+      .eq("organization_id", session.user.organizationId)
       .order("name", { ascending: true });
 
     if (error) {
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
         name: body.name.trim(),
         description: body.description?.trim() || null,
         created_by: session.user.id,
+        organization_id: session.user.organizationId,
         head_user_id: session.user.id, // Legacy support fallback
       })
       .select()

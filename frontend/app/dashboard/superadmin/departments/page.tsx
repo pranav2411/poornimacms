@@ -39,6 +39,7 @@ export default async function SuperadminDepartmentsPage() {
         )
       )
     `)
+    .eq("organization_id", session.user.organizationId)
     .order("name", { ascending: true });
 
   if (deptError) {
@@ -50,6 +51,7 @@ export default async function SuperadminDepartmentsPage() {
     .from("users")
     .select("id, name, email, image:avatar_url")
     .eq("role", "admin")
+    .eq("organization_id", session.user.organizationId)
     .order("name", { ascending: true });
 
   if (adminError) {
@@ -61,6 +63,7 @@ export default async function SuperadminDepartmentsPage() {
     .from("users")
     .select("id, name, email, image:avatar_url, department_id")
     .eq("role", "vendor")
+    .eq("organization_id", session.user.organizationId)
     .order("name", { ascending: true });
 
   if (vendorError) {
